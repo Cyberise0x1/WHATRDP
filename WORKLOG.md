@@ -71,19 +71,12 @@ one of your own reseller offers (`resellerProduct` + `os`), or custom specs
 (`region` + `tier` + `custom{cpuCores,ramMb,diskGb,ipv4Count}` + `os`).
 `dryRun: true` returns the discounted quote without ordering.
 
-### API key status — BLOCKED
+### API key status — RESOLVED
 
-The stored `RDP_MONSTER_API_KEY` is a 32-character string with no prefix. The
-API requires the `rdpm_` prefix, so it is sent as `rdpm_<key>`. Format
-validation passes, but the token lookup fails:
-
-```
-401 {"error":"unauthorized","message":"Token revoked or unknown"}
-```
-
-Interpretation: the token was revoked/deleted, or it was issued to a different
-account. A token generated in the panel is currently **not** visible to this
-shell — the environment still exposes the old value.
+The original secret was a 32-character string with no prefix and returned
+`401 Token revoked or unknown`. It was replaced with a full `rdpm_…` token
+(37 chars, name `replitcreation`, scopes `vps:read`, `vps:write`,
+`billing:read`) and now authenticates successfully.
 
 Verification one-liner:
 
@@ -92,7 +85,95 @@ curl -s "https://dashboard.rdp.monster/api/v1/account" \
   -H "Authorization: Bearer $RDP_MONSTER_API_KEY"
 ```
 
-Expected on success: `200` with balance and service data.
+### Verified account state (2026-10-28)
+
+```json
+{
+  "email": "cyberisetecnologies@consultant.com",
+  "balanceCents": 0,
+  "activeServices": 0,
+  "unpaidInvoices": 0,
+  "unpaidCents": 0,
+  "reseller": { "tier": "bronze", "discountPercent": 15, "turnover30dCents": 0 },
+  "token": { "name": "replitcreation",
+             "scopes": ["vps:read", "vps:write", "billing:read"] },
+  "rateLimitPerMinute": 120
+}
+```
+
+- Balance is **$0.00** — nothing can be ordered until it is funded.
+- Tier is **Bronze (15%)**; next tier is Silver at $100 of 30-day turnover.
+- No servers, no unpaid invoices.
+- `resellerProducts` is empty — no custom white-label offers defined yet.
+
+### Catalog as returned by the API
+
+- Products: `windows-rdp`, `linux-vps`, `dedicated-servers`
+- Regions: `europe`, `usa`
+- Tiers: `CLASSIC`, `HIGH_PERFORMANCE`
+- 40 plans total. Windows RDP and Linux VPS are priced identically per SKU.
+- OS templates: Windows Server 2022/2012; Ubuntu 24.04/22.04/20.04; Debian
+  12/11; CentOS Stream 9/8; Kali.
+- Custom specs are allowed per region/tier, e.g. Europe CLASSIC up to 32 cores,
+  128 GB RAM, 1000 GB disk, 30 IPv4; Europe HIGH_PERFORMANCE up to 16 cores,
+  64 GB RAM.
+- Dedicated servers are not in `/catalog`; they come from `/dedicated/offers`.
+
+Monthly list price vs Bronze cost (all regions share the same ladder):
+
+| Spec (cores / RAM / disk) | List | Bronze cost | Margin |
+| --- | --- | --- | --- |
+| 2 / 6 GB / 40 GB | $8.99 | $7.64 | $1.35 |
+| 4 / 8 GB / 70 GB | $16.99 | $14.44 | $2.55 |
+| 6 / 12 GB / 90 GB | $29.99 | $25.49 | $4.50 |
+| 12 / 24 GB / 150 GB | $41.99 | $35.69 | $6.30 |
+| 24 / 64 GB / 200 GB | $82.99 | $70.54 | $12.45 |
+| HP 2 / 4 GB / 60 GB | $13.99 | $11.89 | $2.10 |
+| HP 4 / 8 GB / 100 GB | $25.99 | $22.09 | $3.90 |
+| HP 6 / 16 GB / 140 GB | $47.99 | $40.79 | $7.20 |
+| HP 8 / 32 GB / 180 GB | $87.99 | $74.79 | $13.20 |
+| HP 10 / 48 GB / 220 GB | $119.99 | $101.99 | $18.00 |
+
+Note the highest margin sits on the largest plans, so a catalogue weighted
+towards the 12–24 core tiers needs fewer sales to clear the same profit.
+
+### Integration brief — received and verified
+
+Source: `attached_assets/rdp-monster-api-prompt_1793222080990.md` (318 lines).
+It is the authoritative narrative companion to the OpenAPI document: request
+and response shapes for every endpoint, the full error-code table, webhook
+signature scheme, lifecycle rules and the pricing catalog.
+
+Verification against the live API on 2026-10-28:
+
+- All **40 SKUs** in the brief's catalog table exist, and every monthly,
+  quarterly and yearly figure matches `/catalog` exactly — including the
+  outlier `linux/usa/28` at $26.99/mo quarterly versus $26.66 for its Windows
+  twin, which is genuinely in the live data and not a typo.
+- `POST /servers` with `dryRun: true` returns exactly what the brief documents:
+  `subtotalCents 899`, `resellerDiscountPercent 15`, `resellerDiscountCents 135`,
+  `totalCents 764`, `balanceCents 0`.
+- `GET /servers` returns an empty page with `meta.total 0`.
+- **Stale in the brief:** its dedicated table (stock for `dedicated/550`) shows
+  stock 1, but all three offers now report `stock: 0, available: false`.
+  The brief itself warns stock moves constantly — always read
+  `/dedicated/offers` before selling one.
+- Dedicated reseller discounts are **per offer**, not the tier discount: 3% on
+  `dedicated/550` at Bronze, none on `dedicated/548` and `dedicated/545`.
+
+Rules worth keeping in mind while building:
+
+- Everything is prepaid from balance; insufficient funds is `402
+  insufficient_balance` and nothing is created or charged.
+- Never blindly retry `POST /servers` on a 5xx — check `GET /servers` first,
+  since a retry can double-provision.
+- Poll `GET /servers/:id` every 5 s until `ACTIVE` for VPS; every few minutes
+  for dedicated, which the team delivers by hand.
+- Webhooks are `x-rdpm-signature: v1=<hex>` over `timestamp + "." + rawBody`,
+  HMAC-SHA256, 10 s response budget, 6 retries with backoff, 5 min replay
+  window. Always re-fetch the object rather than trusting the payload.
+- `resellerProduct` slugs decouple the shop from their SKUs — the right choice
+  for a white-label catalogue (currently empty on this account).
 
 ### Decisions
 
@@ -102,13 +183,13 @@ Expected on success: `200` with balance and service data.
 
 ### Open items
 
-- [ ] Update the `RDP_MONSTER_API_KEY` secret with the full `rdpm_…` token and
-      restart the shell so the new value is picked up.
-- [ ] Confirm the token carries `vps:read`, `vps:write`, `billing:read`.
-- [ ] `openapi.md` was mentioned as uploaded but is not present in the
-      workspace. Re-upload or keep using `/api/v1/openapi.json`.
-- [ ] Confirm reseller access is approved (not just a standard client account).
-- [ ] Fund the prepaid balance before the first order.
+- [x] Update the `RDP_MONSTER_API_KEY` secret — done, token authenticates.
+- [x] Confirm token scopes — `vps:read`, `vps:write`, `billing:read`.
+- [x] OpenAPI spec obtained — byte-identical to the live
+      `/api/v1/openapi.json` (SHA-256 `0211cf58…f1f6`).
+- [ ] Fund the prepaid balance; it is currently $0.00.
+- [ ] Define white-label offers in `resellerProducts` (currently empty).
+- [ ] Decide the storefront stack (WHMCS vs custom panel).
 
 ---
 
