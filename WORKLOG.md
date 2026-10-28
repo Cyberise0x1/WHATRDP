@@ -239,3 +239,60 @@ retails $54.00.
   gravitate here and the reseller of record absorbs that exposure.
 - Billing is prepaid, so inventory must be funded before it sells.
 - White-label means support and disputes are ours, not theirs.
+
+---
+
+## 2026-10-28 — storefront build
+
+Two integrations scaffolded against the live API.
+
+### WHMCS module (`whmcs/`)
+
+PHP 8.1+, `curl` only, no Composer dependency.
+
+- `modules/servers/rdpmonster/` — CreateAccount, Suspend, Unsuspend, Terminate,
+  ChangePassword, ChangePackage, ClientArea, AdminServicesTabFields, admin
+  buttons, TestConnection.
+- `modules/addons/rdpmonster/` — HMAC-verified webhook receiver that syncs
+  statuses and pulls credentials into the WHMCS service row.
+- Token lives in the WHMCS server's **Access Hash** field; hostname is the base
+  URL.
+- Cycle mapping is automatic (Monthly → MONTHLY … Triennially → TRIENNIALLY).
+- Dedupe: a 5xx on `POST /servers` triggers a label search before any retry, so
+  a timed-out create cannot double-bill.
+- All eight PHP files pass `php -l`. The API client was exercised live:
+  `/account`, `/catalog` (40 plans), a `dryRun` quote ($8.99 → $7.64 at 15%)
+  and a 404 path all returned correctly.
+
+### Next.js storefront (`storefront/`)
+
+Next 15 App Router, TypeScript, no UI framework. `npm run build` passes and
+`tsc --noEmit` is clean.
+
+- Catalogue server-rendered from `/catalog`; retail = list × 1.7 rounded to .99
+  (Basic $8.99 → sells at $15.99).
+- Stripe Checkout → webhook marks paid → `POST /servers` → order page polls
+  until `ACTIVE` and reveals IP/user/password.
+- Provider webhooks handled at `/api/webhooks/rdpmonster` with signature and
+  5-minute replay checks.
+- Credentials encrypted at rest with AES-256-GCM (`APP_SECRET`).
+- Orders in SQLite via `node:sqlite` — swap for Postgres before running more
+  than one instance.
+- End-to-end test against the real account: checkout created order #1, the
+  provisioning attempt hit the $0 balance, returned `402`, and the order stored
+  the friendly "top up the reseller balance" message. No server was created and
+  no duplicate appeared in `GET /servers`.
+
+### Still open
+
+- [ ] Top up the balance — nothing can be sold until it is funded.
+- [ ] Create reseller products in the panel so the shop can sell your own
+      offers instead of platform SKUs.
+- [ ] Pick which path to production: WHMCS on shared hosting, or the Next app
+      on a VPS with Postgres.
+- [ ] Stripe live keys, business verification, terms/refund policy.
+
+The full prerequisite list for operating the business lives in
+`LAUNCH-REQUIREMENTS.md`.
+
+
