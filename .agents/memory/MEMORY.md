@@ -1,0 +1,1 @@
+- [Reseller launch scope](reseller-launch-scope.md) — RDP.monster reseller business targeting Nigeria and international customers, with NGN and USD checkout.
