@@ -73,6 +73,10 @@ Pick exactly one:
 
 Common to both: domain, DNS, TLS, and a branded email domain.
 
+The hosting evaluation and recommendation for running WHMCS is recorded in
+`HOSTING-CHOICE.md`.
+
+
 ## 5. Payments
 
 - Merchant account: Stripe and/or PayPal. Both require a legal entity, business
