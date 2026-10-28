@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(agent-browser:*)",
+      "Shell(for:*)",
+      "Shell(do:*)",
+      "Shell(curl -sS -m 15 -o /tmp/m.html -w %{http_code} %{size_download}  -A Mozilla/5.0  -L)",
+      "Shell(grep:*)",
+      "Shell(done:*)"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
