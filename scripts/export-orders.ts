@@ -3,9 +3,23 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 
 const columns = [
-  "id", "token", "plan_sku", "os", "cycle", "amount_cents", "status", "email",
-  "service_id", "primary_ip", "username", "password_enc", "error", "stripe_session",
-  "created_at", "updated_at",
+  "id",
+  "token",
+  "plan_sku",
+  "os",
+  "cycle",
+  "amount_cents",
+  "status",
+  "email",
+  "service_id",
+  "primary_ip",
+  "username",
+  "password_enc",
+  "error",
+  "payment_reference",
+  "currency",
+  "created_at",
+  "updated_at",
 ];
 
 function literal(value: unknown): string {
@@ -29,12 +43,30 @@ export async function exportOrders(source: string, output: string) {
   const db = new DatabaseSync(resolve(source), { readOnly: true });
   try {
     db.exec("BEGIN");
-    const rows = db.prepare(`SELECT ${columns.join(", ")} FROM orders ORDER BY id`).all();
+    const available = new Set(
+      db
+        .prepare("PRAGMA table_info(orders)")
+        .all()
+        .map((row) => row.name),
+    );
+    // Compatibility with immutable pre-neutralization backups. This is not a
+    // payment gateway integration and never mutates the source copy.
+    const select = columns.map((column) => {
+      if (column === "payment_reference" && !available.has(column))
+        return "stripe_session AS payment_reference";
+      if (column === "currency" && !available.has(column)) return "'USD' AS currency";
+      return column;
+    });
+    const rows = db.prepare(`SELECT ${select.join(", ")} FROM orders ORDER BY id`).all();
     const tokens = new Set(rows.map((row) => row.token));
-    if (tokens.size !== rows.length) throw new Error("Duplicate order tokens; reconcile source first");
-    const sql = rows.map((row) =>
-      `INSERT INTO orders (${columns.join(", ")}) VALUES (${columns.map((key) => literal(row[key])).join(", ")});`,
-    ).join("\n");
+    if (tokens.size !== rows.length)
+      throw new Error("Duplicate order tokens; reconcile source first");
+    const sql = rows
+      .map(
+        (row) =>
+          `INSERT INTO orders (${columns.join(", ")}) VALUES (${columns.map((key) => literal(row[key])).join(", ")});`,
+      )
+      .join("\n");
     db.exec("COMMIT");
     await mkdir(dirname(target), { recursive: true, mode: 0o700 });
     await writeFile(target, sql + "\n", { flag: "wx", mode: 0o600 });

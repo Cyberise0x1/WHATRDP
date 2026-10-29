@@ -1,0 +1,49 @@
+name: Deploy staging
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: >-
+      vars.ENABLE_STAGING_DEPLOYMENTS == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run cf:build && npm run cf:bundle:check
+      - name: Prepare approved staging bindings
+        run: npm run deploy:prepare -- staging
+        env:
+          DEPLOYMENT_APPROVED: "true"
+          STAGING_WORKER_NAME: ${{ vars.STAGING_WORKER_NAME }}
+          STAGING_D1_DATABASE_NAME: ${{ vars.STAGING_D1_DATABASE_NAME }}
+          STAGING_D1_DATABASE_ID: ${{ vars.STAGING_D1_DATABASE_ID }}
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+      - name: Verify schema and deploy the normal Worker
+        run: |
+          npx --no-install tsx scripts/check-remote-migrations.ts
+          npx --no-install wrangler deploy --config generated-artifacts/deployment/wrangler.json
+        env:
+          DEPLOYMENT_APPROVED: "true"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

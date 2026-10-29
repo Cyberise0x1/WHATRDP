@@ -1,0 +1,52 @@
+name: Deploy production
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DEPLOY to request a reviewed production release
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+jobs:
+  checks:
+    if: vars.ENABLE_PRODUCTION_DEPLOYMENTS == 'true' && github.ref == 'refs/heads/main' && inputs.confirmation == 'DEPLOY'
+    uses: ./.github/workflows/ci.yml
+  deploy:
+    needs: checks
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Verify required-reviewer protection exists
+        run: npx --no-install tsx scripts/verify-production-policy.ts
+        env:
+          PRODUCTION_POLICY_READ_TOKEN: ${{ secrets.PRODUCTION_POLICY_READ_TOKEN }}
+      - run: npm run cf:build && npm run cf:bundle:check
+      - name: Prepare approved production bindings
+        run: npm run deploy:prepare -- production
+        env:
+          DEPLOYMENT_APPROVED: "true"
+          PRODUCTION_WORKER_NAME: ${{ vars.PRODUCTION_WORKER_NAME }}
+          PRODUCTION_D1_DATABASE_NAME: ${{ vars.PRODUCTION_D1_DATABASE_NAME }}
+          PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+          STAGING_D1_DATABASE_ID: ${{ vars.STAGING_D1_DATABASE_ID }}
+      - name: Verify schema and deploy the normal Worker
+        run: |
+          npx --no-install tsx scripts/check-remote-migrations.ts
+          npx --no-install wrangler deploy --config generated-artifacts/deployment/wrangler.json
+        env:
+          DEPLOYMENT_APPROVED: "true"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

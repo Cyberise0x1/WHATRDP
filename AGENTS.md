@@ -1,76 +1,42 @@
-# AGENTS.md — shared operating memory
+# Repository instructions
 
-Two coding agents work in this repository at the same time, on one filesystem:
+Read `README.md`, the relevant files under `docs/`, and
+`.agents/memory/decisions.md` before changing application behavior. Historical
+decisions are append-only; older path references may be stale after relocation.
+The current repository tree and later decisions take precedence over old
+implementation notes.
 
-- **CommandCode** — runs in the Replit shell
-- **Replit Agent** — runs in the Replit workspace
+## Scope
 
-They share one memory. Read this file before anything else.
+- One root-level Next.js app on Cloudflare Workers/OpenNext and D1.
+- Provider-managed RDP inventory; this app does not host the virtual machines.
+- Zeno is the selected future gateway; no gateway is implemented at present.
+- The product must eventually support NGN and USD; current catalogue prices are USD.
+- Checkout stays disabled until a verified gateway is deliberately implemented.
+- Persist provisioning intent before any billable supplier request. An uncertain
+  result must never trigger an automatic repeat.
 
----
+## Working together
 
-## Read order, every session
+Check the working tree for other agents' edits and coordinate an exclusive window
+before editing the same paths, particularly payments, storage and migrations.
+Never revert someone else's work. Local coordination journals may live under
+`.agents/journal/`, but are not shipped to GitHub. Project tasks are the live work
+queue; do not create duplicate task/status files.
 
-1. `AGENTS.md` (this file)
-2. `.agents/memory/decisions.md` — authoritative, append-only
-3. `.agents/memory/current-state.md` — done / in progress / blocked
-4. `.agents/memory/ownership.md` — who is editing what right now
-5. `.agents/journal/` — the other agent's latest entry
+Keep UI, server integrations and persistence separated. Update callers and tests
+when changing an interface. Reuse the existing repository and atomic claims.
+Never edit an already-applied migration: add a forward migration and document the
+compatibility/rollback implications.
 
-## What wins when sources disagree
+## Safety and verification
 
-| Question | Source of truth |
-| --- | --- |
-| What the code actually does | the code and `tests/` |
-| What we intend to build | `.agents/memory/decisions.md` |
-| What is happening right now | `current-state.md` + `ownership.md` |
-| Historical reasoning | `.agents/journal/`, `WORKLOG.md` |
+No publishing, DNS change, remote resource creation, real data migration, paid
+order or credential rotation without explicit approval. Do not inspect or print
+secret values. Tests use dummy credentials, disposable databases and intercepted
+HTTP only. Never deploy the test SQL fixture wrapper.
 
-If code and `decisions.md` disagree, **stop and log it**. Do not guess and do
-not silently "fix" it.
-
-`HOSTING-CHOICE.md` is superseded (WHMCS is not used). It is history only.
-
-## At a glance
-
-- We resell rdp.monster inventory through their API. **We do not host servers.**
-- The app is a custom Next.js storefront on **Cloudflare Workers + D1**.
-- **No WHMCS.**
-- Payments are **crypto only, via Zeno Bank**. Stripe is being removed.
-- Checkout must support **NGN and USD**.
-- Provisioning never auto-retries an uncertain `POST /servers`.
-
-`decisions.md` is the authority for all of the above; this list is a convenience.
-
-## Rules
-
-1. **Claim before editing.** Add a row to `ownership.md` for the paths you are
-   about to touch. Release it when done.
-2. **Append only** to `decisions.md`, `ownership.md`, and `.agents/journal/`.
-   Never rewrite, reorder, or delete another agent's entries.
-3. **`current-state.md` is sectioned by agent.** Edit only your own block.
-4. **Never revert another agent's work.** If it blocks you, write it in your
-   journal and say so to the user.
-5. **No secrets in files.** Keys live in Replit Secrets or `wrangler secret put`.
-6. **No deploy, no data migration, no destructive command** without explicit
-   user approval.
-7. **One journal file per agent per day**: `.agents/journal/YYYY-MM-DD-<agent>.md`.
-
-## Handoff format
-
-When you stop, append this to your journal:
-
-```
-### Handoff <UTC timestamp>
-Changed:   <paths>
-Verified:  <tests / commands actually run>
-Not done:  <what remains>
-Blocked by:<agent, key, approval, upstream state>
-Next:      <the single next action>
-```
-
-Then update your block in `current-state.md` and release your ownership claims.
-
-## Copy-paste prompt
-
-`AGENTS-PROMPT.md` contains the session-start prompt for either agent.
+Run `npm run ci` before delivering changes. Check the running preview for UI
+changes. Do not claim GitHub checks, cloud deployment or real settlement worked
+unless those external checks actually ran. Keep documentation accurate about
+disabled and unfinished features.

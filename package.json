@@ -1,21 +1,53 @@
 {
-  "name": "rdpmonster-migration-validation",
+  "name": "rdpmonster-storefront",
+  "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "storefront"
-  ],
+  "engines": {
+    "node": ">=22.23.4 <23",
+    "npm": ">=10.9.9 <11"
+  },
+  "packageManager": "npm@10.9.9",
   "scripts": {
-    "build": "npm run build --workspace=storefront",
-    "typecheck": "npm run typecheck --workspace=storefront",
-    "cf:build": "npm run cf:build --workspace=storefront",
-    "cf:preview": "npm run cf:preview --workspace=storefront",
-    "test": "npm run cf:test:bundle && tsx --test tests/*.test.ts",
-    "cf:test:bundle": "wrangler deploy --config tests/wrangler.jsonc --dry-run --outdir \"$PWD/generated-artifacts/worker-fixture\"",
-    "orders:export": "tsx scripts/export-orders-cli.ts"
+    "dev": "next dev --hostname 0.0.0.0 --port 5000",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 5000",
+    "lint": "eslint src scripts tests next.config.ts open-next.config.ts eslint.config.mjs --max-warnings=0",
+    "format:check": "prettier --check \"{src,scripts,tests,docs,.github}/**/*.{ts,tsx,mjs,json,jsonc,md,yml,css}\" \"*.{ts,mjs,json,jsonc,md}\"",
+    "format": "prettier --write \"{src,scripts,tests,docs,.github}/**/*.{ts,tsx,mjs,json,jsonc,md,yml,css}\" \"*.{ts,mjs,json,jsonc,md}\"",
+    "typecheck": "tsc --noEmit",
+    "cf:build": "CLOUDFLARE_BUILD=1 opennextjs-cloudflare build",
+    "cf:preview": "wrangler dev --ip 0.0.0.0 --port 5000 --local",
+    "cf:types": "wrangler types cloudflare-env.d.ts",
+    "cf:test:bundle": "wrangler deploy --config tests/fixtures/wrangler.jsonc --dry-run --outdir \"$PWD/generated-artifacts/worker-fixture\"",
+    "cf:bundle:check": "wrangler deploy --dry-run --outdir \"$PWD/generated-artifacts/release\" && tsx scripts/check-release.ts",
+    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "test:integration": "npm run cf:test:bundle && tsx --test tests/integration/*.test.ts",
+    "test": "npm run test:unit && npm run test:integration",
+    "ci": "npm run lint && npm run format:check && npm run typecheck && npm run test:unit && npm run build && npm run cf:build && npm run test:integration && npm run cf:bundle:check",
+    "orders:export": "tsx scripts/export-orders-cli.ts",
+    "deploy:prepare": "tsx scripts/prepare-deployment.ts",
+    "lockfile:normalize": "node scripts/normalize-lockfile.mjs"
   },
   "dependencies": {
-    "miniflare": "^4.20260730.0",
-    "tsx": "^4.23.15",
-    "wrangler": "^4.155.0"
+    "next": "15.5.28",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@opennextjs/cloudflare": "1.20.14",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "jsonc-parser": "^3.3.1",
+    "miniflare": "4.20260730.0",
+    "prettier": "^3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.72.1",
+    "wrangler": "4.155.0",
+    "yaml": "^2.9.1"
   }
 }

@@ -70,3 +70,18 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   a clean repository before continuing.
   **How to apply:** remove obsolete active integrations during the approved
   cleanup, while preserving customer data and historical migration integrity.
+
+- **Repository packaging · 2026-10-29 · Replit Agent** — Keep one application
+  rather than introduce a frontend/backend package workspace solely for CI.
+  **Why:** both surfaces ship as one Worker, and extra package boundaries would
+  complicate the clean GitHub workflow the user requested without isolating a
+  real service.
+  **How to apply:** introduce another package only for a genuinely independent
+  build/runtime unit, not to imitate a generic project template.
+
+- **Registry portability · 2026-10-29 · Replit Agent** — Keep dependency metadata
+  portable without overriding Replit's managed package registry.
+  **Why:** GitHub runners cannot reach the internal package proxy; regenerating a
+  lockfile over an existing dependency tree can also retain a retired workspace.
+  **How to apply:** normalize generated tarball URLs only, preserve integrity
+  hashes, and validate a fresh dependency tree when changing package boundaries.
