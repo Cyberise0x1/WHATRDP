@@ -16,6 +16,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
+  if (!body || typeof body !== "object" ||
+    [body.sku, body.os, body.cycle, body.email].some((v) => v !== undefined && typeof v !== "string")) {
+    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+  }
   const sku = body.sku?.trim();
   const os = body.os?.trim();
   const cycle = body.cycle?.trim() ?? "MONTHLY";
@@ -53,7 +57,7 @@ export async function POST(request: Request) {
   }
 
   const amount = priceForCycle(plan, cycle);
-  const order = createOrder({ planSku: plan.sku, os, cycle, amountCents: amount, email });
+  const order = await createOrder({ planSku: plan.sku, os, cycle, amountCents: amount, email });
 
   const origin = baseUrl(request.url);
   const successUrl = `${origin}/order/${order.token}`;
@@ -82,11 +86,11 @@ export async function POST(request: Request) {
         metadata: { orderId: String(order.id), token: order.token },
       });
 
-      updateOrder(order.id, { stripe_session: session.id });
+      await updateOrder(order.id, { stripe_session: session.id });
 
       return NextResponse.json({ url: session.url, token: order.token });
     } catch (error) {
-      updateOrder(order.id, { status: "FAILED", error: "Checkout session creation failed" });
+      await updateOrder(order.id, { status: "FAILED", error: "Checkout session creation failed" });
       return NextResponse.json(
         { error: "stripe_error", message: error instanceof Error ? error.message : "Unknown" },
         { status: 502 },
@@ -101,7 +105,7 @@ export async function POST(request: Request) {
     );
   }
 
-  updateOrder(order.id, { status: "PAID" });
+  await updateOrder(order.id, { status: "PAID" });
   await provisionOrder({ ...order, status: "PAID" });
 
   return NextResponse.json({ url: `/order/${order.token}`, token: order.token, dev: true });

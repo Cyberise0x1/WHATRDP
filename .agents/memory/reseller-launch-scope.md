@@ -13,3 +13,8 @@ The user wants to change where the frontend and backend are hosted entirely to C
 **Why:** The user explicitly requested the Cloudflare hosting direction after reviewing WHMCS hosting options.
 
 **How to apply:** Prefer Cloudflare-compatible hosting plans for the custom app, but do not assume that this authorizes dropping WHMCS, replacing live storage, or changing payment providers.
+
+> **Superseded 2026-10-29.** The user has since explicitly authorised all three:
+> WHMCS is dropped (D-003), storage moves to D1 (D-007), and payments move to
+> Zeno Bank (D-004). The target market and NGN/USD requirement still stand
+> (D-006). See `decisions.md`.

@@ -1,0 +1,7 @@
+/generated-artifacts/
+**/.dev.vars*
+**/.env
+**/.env.local
+/tests/generated-artifacts/
+/storefront/.open-next/
+/storefront/.wrangler/

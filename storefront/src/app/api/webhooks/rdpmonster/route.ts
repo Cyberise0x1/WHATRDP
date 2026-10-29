@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true, ignored: "no serviceId" });
   }
 
-  const order = getOrderByServiceId(serviceId);
+  const order = await getOrderByServiceId(serviceId);
   if (!order) {
     return NextResponse.json({ received: true, ignored: "unknown service" });
   }
@@ -44,20 +44,13 @@ export async function POST(request: Request) {
     case "server.created":
     case "server.delivered":
     case "server.renewed":
-      updateOrder(order.id, {
-        status: "PROVISIONING",
-        primary_ip: payload.data?.ip ?? order.primary_ip,
-      });
-      await syncOrder({ ...order, status: "PROVISIONING" });
-      break;
     case "server.suspended":
-      updateOrder(order.id, { error: "Server suspended by provider" });
-      break;
     case "server.deleted":
-      updateOrder(order.id, { status: "CANCELLED" });
+      // Provider data is authoritative; do not trust event-supplied status or IP.
+      await syncOrder(order, true);
       break;
     case "service.expiring":
-      updateOrder(order.id, { error: "Service is expiring soon" });
+      await updateOrder(order.id, { error: "Service is expiring soon" });
       break;
     default:
       break;

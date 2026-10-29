@@ -1,0 +1,9 @@
+node_modules/
+**/.dev.vars*
+**/.env
+**/.env.local
+/generated-artifacts/
+/tests/generated-artifacts/
+/storefront/.open-next/
+/storefront/.wrangler/
+*.tsbuildinfo

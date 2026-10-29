@@ -57,42 +57,49 @@ Notes that matter:
 - Define what is included: extra IPv4 ($1.75/mo each, max 30), upgrades,
   reinstalls, backups (you must provide these yourself — the provider does not).
 
-## 4. Storefront platform
+## 4. Storefront platform — decided
 
-Pick exactly one:
+**Custom Next.js storefront (`storefront/`), hosted on Cloudflare Workers.**
+Everything is coded in-house; WHMCS is not used and does not need hosting.
+`whmcs/` stays in the repo as unused reference only.
 
-**Option A — WHMCS** (built: `whmcs/`)
-- WHMCS licence (~$25–40/month), PHP 8.1+ hosting, MySQL
-- Billing, invoicing, tickets, fraud checks, tax rules included
-- Fastest to first revenue
+- Workers + D1 + Workflows + R2, ~$5/month
+- Full control of UX, pricing and the provisioning flow
+- We own support, dunning and tax ourselves
+- Inventory comes from the rdp.monster API — we do not host servers
 
-**Option B — standalone Next.js** (built: `storefront/`)
-- Node 22 hosting + Postgres, Stripe account
-- Full control of UX and pricing logic
-- You build support, dunning and tax yourself
-
-Common to both: domain, DNS, TLS, and a branded email domain.
-
-The hosting evaluation and recommendation for running WHMCS is recorded in
-`HOSTING-CHOICE.md`.
+Migration plan and constraints: `CLOUDFLARE-MIGRATION.md`.
+`HOSTING-CHOICE.md` is superseded — it evaluates PHP hosting we no longer need.
 
 
-## 5. Payments
+## 5. Payments — crypto only (Zeno Bank)
 
-- Merchant account: Stripe and/or PayPal. Both require a legal entity, business
-  details and identity verification.
-- The provider is no-KYC; **your payment processor is not**. You cannot run the
-  business anonymously through Stripe.
-- Refund policy and chargeback handling — hosting chargebacks are common and
-  card networks require a published policy.
-- Optionally accept crypto directly for customers who want the same privacy
-  posture as the upstream provider.
+No Stripe, no PayPal, no card rails. Zeno Bank hosts the checkout page; we
+create a checkout over their API and provision on a signed webhook.
+
+- **Account:** `dashboard.zenobank.io` → Developers → API key (`sk_…`) and a
+  webhook endpoint with signing secret (`whsec_…`).
+- **Fees:** 0.1% per payment (0.35% Lightning, 0% Binance Pay).
+- **KYC:** none required of merchant or customer. That removes the entity
+  verification gate, but not tax/accounting obligations.
+- **No chargebacks.** Payments are irreversible — screening happens before
+  provisioning, not after.
+- **No refund API.** Refunds are manual outbound transfers; budget network fees.
+- **NGN and USD at checkout.** Zeno supports both as `priceCurrency`, so both
+  are charged natively. Store the charged currency, amount and FX rate on the
+  order; the USD cost basis is for margin, not for validating payment.
+- **Funding loop (BYO wallet, decided):** customer crypto sweeps straight to
+  your own wallet, then to rdp.monster's top-up address. No withdrawal fee or
+  24 h hold. The top-up itself is manual because the API is `billing:read` only.
+  Keep one month of renewals as a buffer.
+- Publish a refund policy anyway: it is a trust signal and EU consumer rules
+  still apply to the service, even if card-network chargeback rules do not.
 
 ## 6. Fulfilment and automation
 
-- Provisioning integration — done in both builds.
-- Webhook receiver with signature verification — done in both builds.
-- Credential delivery: order page (Next) or service page (WHMCS), plus email.
+- Provisioning integration — written against the live API.
+- Webhook receiver with signature verification — written for both providers.
+- Credential delivery: the order page, plus email.
 - **Reconciliation job**: any order stuck in `PAID`/`PROVISIONING` for more than
   10 minutes must be re-synced. `POST /servers` is deliberately never retried
   automatically, because a duplicate costs you money.
@@ -124,8 +131,8 @@ The hosting evaluation and recommendation for running WHMCS is recorded in
 ## 9. Technical infrastructure
 
 - Domain, DNS, TLS certificates.
-- Application hosting with a persistent database (Postgres for more than one
-  instance; SQLite only for a single node).
+- Application hosting: Cloudflare Workers, with D1 as the persistent database
+  (10 GB cap per database, single-writer). No server to patch.
 - Secrets management for the API token, `APP_SECRET` and webhook secrets —
   never in the repo.
 - Backups of customer records and order history.
@@ -160,7 +167,9 @@ The hosting evaluation and recommendation for running WHMCS is recorded in
 | Prepaid balance drained by autoRenew | Low-balance alerts, renewals reserve |
 | Duplicate provisioning on retry | Label-based dedupe, manual reconciliation |
 | Abuse by customers | AUP, verification, rapid termination process |
-| Chargebacks | Clear policy, delivery evidence, fraud screening |
+| Irreversible crypto payments | Pre-payment screening: Turnstile, email check, order-velocity cap, manual review above threshold |
+| Partial / underpaid checkouts | `checkout.partially_paid` never auto-provisions; top-up request or manual refund |
+| Settlement lag (up to 24 h withdrawal) | Keep a funded reseller buffer so sales never stall |
 | Tier downgrade raises costs | Model margin at Bronze, not at the tier you hope for |
 | Provider stock/offer changes | Always read `/catalog` and `/dedicated/offers` before selling |
 
@@ -170,8 +179,9 @@ The hosting evaluation and recommendation for running WHMCS is recorded in
 
 1. Top up the balance with at least $100 (reaches Silver).
 2. Create 2–3 reseller products in the client area with retail prices.
-3. Choose WHMCS *or* the Next storefront and deploy it on a domain.
-4. Open a Stripe account and pass verification.
+3. Deploy the Next storefront to Cloudflare Workers on the domain.
+4. Create the Zeno Bank account, register the webhook, and take one crypto
+   payment end to end in production.
 5. Publish Terms, Refund Policy and AUP pages.
-6. Register the webhook endpoint and set its signing secret.
+6. Register the rdp.monster webhook endpoint and set its signing secret.
 7. Sell one server to yourself, end to end, and confirm credentials arrive.

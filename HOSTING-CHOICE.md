@@ -1,4 +1,9 @@
-# Hosting choice for WHMCS
+# Hosting choice for WHMCS — SUPERSEDED
+
+> **Superseded 2026-10-29.** WHMCS is not part of this business. The storefront
+> and backend are custom and move to Cloudflare Workers + D1 — see
+> `CLOUDFLARE-MIGRATION.md`. This document is kept only as the record of the
+> PHP-hosting evaluation and as a fallback if a PHP storefront is ever revived.
 
 Decision record, 2026-10-28. Evaluated against WHMCS 9.1 system requirements,
 not marketing copy.

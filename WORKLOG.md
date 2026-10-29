@@ -295,4 +295,220 @@ Next 15 App Router, TypeScript, no UI framework. `npm run build` passes and
 The full prerequisite list for operating the business lives in
 `LAUNCH-REQUIREMENTS.md`.
 
+---
+
+## 2026-10-29 — Cloudflare hosting evaluation
+
+### Question
+
+Can the frontend and backend move entirely to Cloudflare, and can the RDP
+reselling itself run there? Prompted by a tweet arguing Workers + D1 + R2 +
+Durable Objects + Workflows now replace a Vercel-style stack.
+
+### Answer
+
+**The application: yes. The product: no.**
+
+Cloudflare can host every piece of the business app — storefront, API, orders
+DB, jobs, email, backups, DNS/WAF. It cannot host the Windows servers we resell,
+and the docs are unambiguous about it. That is fine: the servers already live at
+rdp.monster. "Everything on Cloudflare" means the shop moves; inventory stays.
+
+Full write-up: `CLOUDFLARE-MIGRATION.md`.
+
+### Verified from Cloudflare docs
+
+- **Workers**: 128 MB/isolate, 5 min CPU max (30 s default), no wall-time limit
+  on HTTP requests, 10,000 subrequests, 6 simultaneous outbound connections.
+- **D1**: 10 GB per database (hard cap), single-threaded per DB, 1,000 queries
+  per Worker invocation, 30 s query max, 2 MB row max, 30-day Time Travel.
+- **Containers**: Linux/`amd64` only, max 4 vCPU / 12 GiB / 20 GB disk, disk is
+  ephemeral, and "end-users cannot make non-HTTP TCP or UDP requests to a
+  Container instance." Cannot be an RDP host on three independent counts.
+- **Spectrum**: custom TCP/UDP requires Enterprise + paid add-on, and only
+  proxies to an existing origin. Not a way to run servers, and not self-serve.
+- **Workflows**: durable steps with automatic retries, sleep for weeks, 500k
+  steps/month included.
+- **Email Service**: outbound sending is beta, Workers Paid.
+- **Node compat**: `node:crypto` fully supported (argon2 and ed448/x448
+  excluded) — so `crypto.ts` and `signature.ts` need **no changes**.
+  `node:sqlite` is only a non-functional stub — `store.ts` must move to D1.
+- **Next.js**: OpenNext adapter is the documented path for our existing Next 15
+  app; vinext is now the recommended default but is beta and targets Next 16.
+- **Stripe**: official support exists, but the SDK's default transport is
+  `node:https`, so the client must be built with `createFetchHttpClient()`.
+  Webhook verification already uses `constructEventAsync` — correct as-is.
+- **Cost**: Workers Paid $5/month covers Workers, D1, Durable Objects, Queues,
+  Workflows and email sending allowances. R2 egress is free.
+
+### Consequences
+
+- **WHMCS is out.** ionCube-encoded PHP cannot run in a V8 isolate and the
+  native loader cannot be supplied. If we move to Cloudflare, the Next
+  storefront is the only storefront; keep `whmcs/` as the fallback.
+- **Migration is contained**: one data-layer rewrite (sync → async D1), one
+  Stripe client option, one Next adapter, plus moving provisioning into a
+  Workflow.
+- **Provisioning retry trap**: Workflows retry steps by default. The
+  `POST /servers` step must be declared with zero retries; the existing
+  `web-<id>` label dedupe stays as the backstop.
+- **Hosting cost drops** from ~$10/mo (SkyNet) or ~$44/mo (Peek + WHMCS) to
+  ~$5–6/mo.
+
+### Still blocked upstream of hosting
+
+Unchanged from launch requirements: $0 reseller balance, no reseller products,
+no payment account, no legal pages. Moving hosts does not touch any of these.
+
+### Open items
+
+- [x] Decide: Cloudflare-only (drop WHMCS) or stay on PHP hosting — decided
+      below, Cloudflare-only, custom code.
+- [ ] Port `src/lib/store.ts` to D1 and switch to OpenNext.
+- [ ] Review Cloudflare's AUP for a no-KYC-adjacent reseller storefront.
+- [ ] Fund the reseller balance before any end-to-end test is meaningful.
+
+---
+
+## 2026-10-29 — payment rail and storefront decisions
+
+Three constraints confirmed by the account holder:
+
+1. **Inventory is resold through the rdp.monster API.** We do not host servers.
+   Nothing about the Cloudflare move changes that.
+2. **No WHMCS.** Everything is coded in-house. `whmcs/` is unused reference;
+   `HOSTING-CHOICE.md` is marked superseded.
+3. **Crypto-only payments, no Stripe.** Provider is Zeno Bank
+   (`zenobank.io`), not a placeholder.
+
+### Zeno Bank — verified from docs
+
+- Auth: `X-API-Key: sk_…` header.
+- Create: `POST https://api.zenobank.io/api/v1/checkouts` with
+  `{ orderId, priceAmount, priceCurrency, successRedirectUrl }` where
+  `priceAmount` is a **decimal string** (cents must become `"15.99"`).
+- Response: `id` (`ch_…`), `status: OPEN`, `expiresAt`,
+  `checkoutUrl: https://pay.zenobank.io/ch_…`.
+- Status: `GET /api/v1/public/checkouts/{id}` — **public, no auth**, so the
+  order page can poll it when a webhook is late.
+- Webhooks: `checkout.completed`, `checkout.expired`,
+  `checkout.partially_paid`. Svix/Standard Webhooks headers (`svix-id`,
+  `svix-timestamp`, `svix-signature`), secret `whsec_…`, HMAC-SHA256 over
+  `id.timestamp.rawBody`, verified against the **raw** body.
+- Delivery is **at-least-once**, retried 5 s → 5 m → 30 m → 2 h → 5 h → 10 h.
+  Dedupe on `svix-id`.
+- Fees: **0.1%** (0.35% Lightning, 0% Binance Pay). Withdrawal **$1 + network
+  fees**, up to 24 h, managed mode only. No fiat withdrawals.
+- Intermediary-wallet model: customers may split a payment across tokens and
+  networks; wrong-network sends are still detected.
+- **No refund API** — refunds are manual outbound transfers.
+- No KYC for merchant or customer.
+
+### Design consequences
+
+- Order statuses gain `EXPIRED` and `PARTIAL`. `completed` → `PAID` + start
+  provisioning. `expired` and `partially_paid` **never** provision.
+- Provisioning must be idempotent: at-least-once webhooks plus Workflow retries
+  can both re-trigger. `svix-id` gets a unique index; `web-<orderId>` label
+  dedupe stays.
+- Payment is now created before redirect; the checkout id is stored on the
+  order. After expiry, a **new** checkout is created and replaces the stored id
+  (an expired checkout cannot be reopened).
+- **Wallet mode: bring-your-own wallet (decided).** Funds sweep to our wallet,
+  then to rdp.monster. No $1 withdrawal fee, no 24 h hold, no Zeno custody.
+  Managed remains a dashboard switch if we ever want it.
+- Settlement is still a loop, not automatic: customer crypto → our wallet →
+  manual rdp.monster top-up (`billing:read` only, no top-up endpoint). Keep one
+  month of renewals as a buffer.
+- Fraud control moves entirely to pre-payment: Turnstile, real email, order
+  velocity cap, manual review above a threshold. Irreversible payments mean no
+  post-hoc recovery.
+
+### Concurrent work discovered
+
+While this evaluation was being written, the storefront was ported to
+Workers/D1 in the working tree (uncommitted, timestamps 14:24–14:26):
+`storage/{types,schema,repository}.ts`, `database.ts` + `database.cloudflare.ts`
+(build-time alias), `payments.ts`, `provisioning.ts`, `migrations/0001_orders.sql`,
+`open-next.config.ts`, `wrangler.jsonc`, root `package.json`/lockfile.
+
+That port is still Stripe-based. **Do not rewrite the repository layer** — the
+Zeno swap belongs in `src/lib/payments.ts` (`acceptCheckoutPayment`) plus a
+`0002_zenobank.sql` migration. The atomic `claimPayment` / `claimProvision`
+helpers it introduced are exactly what the at-least-once webhooks need, and
+`REVIEW_REQUIRED` is a better outcome than `FAILED` for uncertain supplier
+calls.
+
+### Code delta queued (deliberately not landed yet)
+
+- replace the provider inside `src/lib/payments.ts`; keep `claimPayment`
+- delete `src/lib/stripe.ts` and `src/app/api/webhooks/stripe/route.ts`
+- add `src/lib/zenobank.ts` (plain `fetch`, no SDK) and
+  `src/app/api/webhooks/zenobank/route.ts` (WebCrypto HMAC verification)
+- add `0002_zenobank.sql`: `checkout_ref` (generalise `stripe_session`),
+  `webhook_events(svix_id UNIQUE)`, and room for `EXPIRED`/`PARTIAL` statuses
+- rewrite `checkout/route.ts` to create a Zeno checkout instead of a Stripe
+  session
+- update `storefront/README.md` (it still describes Stripe and Node 22 SQLite)
+
+Not landed because the D1 port above is still in flight and the payment swap
+touches the same files. Also blocked on two inputs: **managed vs BYO wallet**,
+and a real `sk_`/`whsec_` pair to test against.
+
+### Open items
+
+- [x] Wallet mode — **BYO**, decided 2026-10-29.
+- [ ] Create the Zeno account, API key, webhook endpoint and signing secret.
+- [ ] **Wait for the in-flight D1/OpenNext port to finish**, then land the Zeno
+      swap on `src/lib/payments.ts` + `0002_zenobank.sql`. Do not edit the
+      repository layer while that agent is active.
+- [ ] Decide the partial-payment policy: top-up request or manual refund.
+- [ ] Keep a funded rdp.monster buffer so settlement lag never stops sales.
+
+---
+
+## 2026-10-29 — shared memory for the two agents
+
+CommandCode and the Replit Agent work on the same filesystem at the same time.
+Until now each kept its own notes, and they had already drifted.
+
+### What was built
+
+- `AGENTS.md` — entry point: read order, authority table, rules, handoff format.
+- `.agents/memory/decisions.md` — append-only, dated, ID'd decisions (D-001…).
+  This is the authority; everything else points at it.
+- `.agents/memory/current-state.md` — per-agent block: done / in progress /
+  blocked. Each agent edits only its own block.
+- `.agents/memory/ownership.md` — path claims with leases, so the two agents
+  cannot edit the same file in the same minute.
+- `.agents/journal/YYYY-MM-DD-<agent>.md` — append-only session logs, one per
+  agent per day, so neither can clobber the other.
+- `AGENTS-PROMPT.md` — the copy-paste session-start prompt, plus a one-line
+  version.
+
+### Drift that was already present
+
+`reseller-launch-scope.md` said: "do not assume that this authorizes dropping
+WHMCS, replacing live storage, or changing payment providers." All three have
+since been explicitly authorised by the user. Rather than silently rewriting
+another agent's file, the note is left intact and marked superseded by D-003
+(no WHMCS), D-007 (D1) and D-004 (Zeno). This is exactly the class of error the
+shared file prevents: a stale caveat outvoting a live instruction.
+
+### New requirement recovered from the other agent's memory
+
+Checkout must show **NGN and USD** (Nigeria + international). Zeno supports NGN
+as `priceCurrency`, so both can be charged natively. Consequence recorded as
+D-006 and added to the plans:
+
+- the order stores `charge_currency`, `charge_amount_minor` and the `fx_rate`
+  used — `amount_cents` stays the USD cost basis for margin;
+- `claimPayment` compares against the **charged** amount, not the USD basis;
+- FX is locked when the checkout is created and cached in KV with a short TTL.
+
+### Still true
+
+Nothing here unblocks the three real blockers: reseller balance is $0, no
+reseller products, no Zeno account/keys.
+
 

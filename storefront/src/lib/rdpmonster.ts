@@ -110,7 +110,7 @@ export async function api<T>(
   options: { retries?: number } = {},
 ): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
-  const retries = options.retries ?? (method === "GET" ? 2 : 0);
+  const retries = method === "GET" ? Math.min(3, Math.max(0, options.retries ?? 2)) : 0;
   let attempt = 0;
 
   while (true) {
@@ -118,6 +118,7 @@ export async function api<T>(
     const response = await fetch(`${baseUrl()}${path}`, {
       ...init,
       cache: "no-store",
+      signal: init.signal ?? AbortSignal.timeout(10_000),
       headers: {
         Authorization: `Bearer ${token()}`,
         Accept: "application/json",
@@ -141,13 +142,13 @@ export async function api<T>(
     const code = body.error ?? "";
     const message = body.message ?? code ?? `HTTP ${response.status}`;
 
-    if (response.status === 429 && attempt <= retries + 1) {
+    if (method === "GET" && response.status === 429 && attempt <= retries) {
       const retryAfter = Number(response.headers.get("retry-after") ?? 2);
       await sleep(Math.min(30_000, Math.max(1000, retryAfter * 1000)));
       continue;
     }
 
-    if (response.status >= 500 && attempt <= retries) {
+    if (method === "GET" && response.status >= 500 && attempt <= retries) {
       await sleep(250 * 2 ** (attempt - 1));
       continue;
     }

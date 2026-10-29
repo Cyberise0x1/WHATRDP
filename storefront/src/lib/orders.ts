@@ -1,6 +1,7 @@
 import { ApiError, createServer, getCredentials, getServer } from "./rdpmonster";
 import { decryptSecret, encryptSecret } from "./crypto";
-import { getOrderByToken, updateOrder, type Order, type OrderStatus } from "./store";
+import { getOrderByToken, updateOrder, orderRepository, type Order, type OrderStatus } from "./store";
+import { runProvisioning } from "./provisioning";
 
 const ORDER_STATUSES: OrderStatus[] = [
   "PENDING_PAYMENT",
@@ -12,57 +13,40 @@ const ORDER_STATUSES: OrderStatus[] = [
 ];
 
 function mapStatus(remote: string): OrderStatus {
+  if (remote === "TERMINATED") return "CANCELLED";
+  if (remote === "EXPIRED" || remote === "SUSPENDED") return "FAILED";
+  if (remote === "EXPIRING_SOON") return "ACTIVE";
   return (ORDER_STATUSES as string[]).includes(remote) ? (remote as OrderStatus) : "PROVISIONING";
 }
 
 export function orderLabel(order: Order): string {
-  return `web-${order.id}`;
+  return `web-${order.token}`;
 }
 
 export async function provisionOrder(order: Order): Promise<Order> {
-  if (order.status !== "PAID" || order.service_id) {
+  if (process.env.PROVISIONING_ENABLED !== "true") {
     return order;
   }
-
-  try {
-    const created = await createServer({
-      plan: order.plan_sku,
-      os: order.os,
-      cycle: order.cycle,
-      label: orderLabel(order),
-      quantity: 1,
-    });
-
-    return updateOrder(order.id, {
-      service_id: created.data.id,
-      status: "PROVISIONING",
-      error: null,
-    });
-  } catch (error) {
-    const message =
-      error instanceof ApiError
-        ? error.isInsufficientBalance
-          ? "Reseller balance is too low to fulfil this order. It will be retried once the balance is topped up."
-          : error.message
-        : "Unexpected provisioning error";
-    return updateOrder(order.id, { status: "FAILED", error: message });
-  }
+  // Cloudflare's validated staging mode is intentionally not wired to paid creation.
+  // Queue/outbox activation is a separate approval-gated cutover step.
+  if (process.env.DEPLOYMENT_TARGET?.startsWith("cloudflare")) return order;
+  return (await runProvisioning(await orderRepository(), order.id, createServer)) ?? order;
 }
 
-export async function syncOrder(order: Order): Promise<Order> {
+export async function syncOrder(order: Order, force = false): Promise<Order> {
   if (!order.service_id) return order;
   if (order.status === "FAILED" || order.status === "CANCELLED") return order;
-  if (order.status === "ACTIVE" && order.password_enc) return order;
+  if (!force && order.status === "ACTIVE" && order.password_enc) return order;
 
   try {
     const server = await getServer(order.service_id);
     const ip = server.ips?.find((entry) => entry.primary)?.address ?? server.ips?.[0]?.address ?? null;
 
-    let current = updateOrder(order.id, { status: mapStatus(server.status), primary_ip: ip });
+    let current = await updateOrder(order.id, { status: mapStatus(server.status), primary_ip: ip });
 
     if (server.status === "ACTIVE" && !current.password_enc) {
       const credentials = await getCredentials(order.service_id);
-      current = updateOrder(order.id, {
+      current = await updateOrder(order.id, {
         status: "ACTIVE",
         username: credentials.user,
         password_enc: encryptSecret(credentials.password),
@@ -71,7 +55,7 @@ export async function syncOrder(order: Order): Promise<Order> {
 
     return current;
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : "Status check failed";
+    const message = "Status check failed. Contact support if this persists.";
     return updateOrder(order.id, { error: message });
   }
 }
@@ -96,7 +80,7 @@ export function publicOrder(order: Order) {
 }
 
 export async function refreshByToken(token: string): Promise<Order | null> {
-  const found = getOrderByToken(token);
+  const found = await getOrderByToken(token);
   if (!found) return null;
   return syncOrder(found);
 }

@@ -10,7 +10,7 @@ export async function GET(
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params;
-  const order = getOrderByToken(token);
+  const order = await getOrderByToken(token);
   if (!order) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -28,5 +28,5 @@ export async function GET(
     // status is still returned; the stored error is surfaced to the client
   }
 
-  return NextResponse.json({ data: publicOrder(current) });
+  return NextResponse.json({ data: publicOrder(current) }, { headers: { "Cache-Control": "private, no-store" } });
 }

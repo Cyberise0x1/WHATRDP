@@ -1,0 +1,21 @@
+{
+  "name": "rdpmonster-migration-validation",
+  "private": true,
+  "workspaces": [
+    "storefront"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=storefront",
+    "typecheck": "npm run typecheck --workspace=storefront",
+    "cf:build": "npm run cf:build --workspace=storefront",
+    "cf:preview": "npm run cf:preview --workspace=storefront",
+    "test": "npm run cf:test:bundle && tsx --test tests/*.test.ts",
+    "cf:test:bundle": "wrangler deploy --config tests/wrangler.jsonc --dry-run --outdir \"$PWD/generated-artifacts/worker-fixture\"",
+    "orders:export": "tsx scripts/export-orders-cli.ts"
+  },
+  "dependencies": {
+    "miniflare": "^4.20260730.0",
+    "tsx": "^4.23.15",
+    "wrangler": "^4.155.0"
+  }
+}

@@ -23,6 +23,7 @@ const LABELS: Record<string, string> = {
   PROVISIONING: "Installing your server",
   ACTIVE: "Ready",
   FAILED: "Provisioning failed",
+  REVIEW_REQUIRED: "Support review required",
   CANCELLED: "Cancelled",
 };
 

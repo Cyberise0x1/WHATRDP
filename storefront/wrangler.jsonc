@@ -1,0 +1,23 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "rdpmonster-staging-validation",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "rdpmonster-local-validation",
+      // Local placeholder, NOT an existing Cloudflare account/database.
+      "database_id": "00000000-0000-0000-0000-000000000008",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "ALLOW_DEV_CHECKOUT": "false",
+    "PROVISIONING_ENABLED": "false",
+    "DEPLOYMENT_TARGET": "cloudflare-staging"
+  },
+  "observability": { "enabled": true }
+}

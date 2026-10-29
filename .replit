@@ -6,3 +6,31 @@ channel = "stable-25_05"
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Cloudflare local preview"
+
+[[workflows.workflow]]
+name = "Cloudflare local preview"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd storefront && npm run cf:preview"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
