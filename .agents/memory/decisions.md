@@ -63,3 +63,10 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   successful compilation alone hid an unsupported native SQLite import.
   **How to apply:** test the packaged Worker in workerd with disposable data
   and intercepted external requests before treating an adapter change as safe.
+
+- **Repository distribution · 2026-10-29 · user** — Prepare the codebase for
+  GitHub CI/CD and remove legacy WHMCS and Stripe implementation.
+  **Why:** the user said these integrations are no longer needed and requested
+  a clean repository before continuing.
+  **How to apply:** remove obsolete active integrations during the approved
+  cleanup, while preserving customer data and historical migration integrity.
