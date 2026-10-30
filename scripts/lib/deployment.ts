@@ -25,6 +25,13 @@ export function deploymentConfig(target: string, vars: Variables, base: Record<s
   if (other === id || (environment === "production" && !other)) {
     throw new Error("Staging and production require different databases");
   }
+  const hostname = vars[`${prefix}_HOSTNAME`]?.trim();
+  if (
+    hostname &&
+    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(hostname)
+  ) {
+    throw new Error("An approved custom hostname must be a bare DNS name");
+  }
   return {
     ...base,
     name,
@@ -39,8 +46,11 @@ export function deploymentConfig(target: string, vars: Variables, base: Record<s
       },
     ],
     vars: { PROVISIONING_ENABLED: "false", DEPLOYMENT_TARGET: `cloudflare-${environment}` },
-    workers_dev: true,
-    routes: [],
+    // A configured hostname becomes a custom domain and the public
+    // *.workers.dev route is disabled. Without one, the Worker stays on
+    // workers.dev only (preview) — production should always set a hostname.
+    workers_dev: !hostname,
+    routes: hostname ? [{ pattern: hostname, custom_domain: true }] : [],
   };
 }
 

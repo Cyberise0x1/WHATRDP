@@ -11,6 +11,18 @@ The owner must separately approve repository connection, staging resources,
 least-privilege credentials and any publishing. Checkout remains disabled even
 after a release; hosting setup is not launch readiness.
 
+**Release authority (updated 2026-10-30).** The repository is now **public** on
+GitHub Free. That makes environments, environment secrets, deployment branch
+policies, branch protection and required reviewers available: the `staging` and
+`production` environments are configured with a `main`-only deployment policy, and
+`main` requires the **Repository checks** status check. Production additionally has
+a required reviewer and still needs a `PRODUCTION_POLICY_READ_TOKEN` with
+repository Administration (read); until that secret exists the
+`verify-production-policy` step fails closed. Do not weaken the guard. Note that
+publication makes all tracked source and `.agents/memory/` publicly visible; a
+secret-pattern scan of tracked files and history found none, but the owner should
+still run a dedicated history scanner before treating publication as safe.
+
 ## 1. GitHub checks
 
 Push the reviewed source to the owner's chosen repository only after approval.
@@ -33,16 +45,18 @@ releases remain blocked—there is no unsafe fallback.
 Provision distinct Workers and D1 databases after approval. Names must end in
 `-staging` and `-production`. Set repository variables:
 
-| Variable                        | Meaning                                                           |
-| ------------------------------- | ----------------------------------------------------------------- |
-| `STAGING_WORKER_NAME`           | Approved Worker name ending `-staging`                            |
-| `STAGING_D1_DATABASE_NAME`      | Approved database name ending `-staging`                          |
-| `STAGING_D1_DATABASE_ID`        | Actual staging UUID, never the local placeholder                  |
-| `PRODUCTION_WORKER_NAME`        | Approved Worker name ending `-production`                         |
-| `PRODUCTION_D1_DATABASE_NAME`   | Approved database name ending `-production`                       |
-| `PRODUCTION_D1_DATABASE_ID`     | Different actual production UUID                                  |
-| `ENABLE_STAGING_DEPLOYMENTS`    | Leave absent/false until staging releases are approved            |
-| `ENABLE_PRODUCTION_DEPLOYMENTS` | Leave absent/false until production policy/resources are approved |
+| Variable                        | Meaning                                                                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_WORKER_NAME`           | Approved Worker name ending `-staging`                                                                                          |
+| `STAGING_D1_DATABASE_NAME`      | Approved database name ending `-staging`                                                                                        |
+| `STAGING_D1_DATABASE_ID`        | Actual staging UUID, never the local placeholder                                                                                |
+| `PRODUCTION_WORKER_NAME`        | Approved Worker name ending `-production`                                                                                       |
+| `PRODUCTION_D1_DATABASE_NAME`   | Approved database name ending `-production`                                                                                     |
+| `PRODUCTION_D1_DATABASE_ID`     | Different actual production UUID                                                                                                |
+| `ENABLE_STAGING_DEPLOYMENTS`    | Leave absent/false until staging releases are approved                                                                          |
+| `ENABLE_PRODUCTION_DEPLOYMENTS` | Leave absent/false until production policy/resources are approved                                                               |
+| `STAGING_HOSTNAME`              | Optional custom domain for staging; when set, the public `*.workers.dev` route is disabled and a custom-domain route is created |
+| `PRODUCTION_HOSTNAME`           | Custom domain for production. Set this before a production release; without it the Worker serves only on `*.workers.dev`        |
 
 Store **separate** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` credentials
 in each GitHub environment. Limit tokens to the approved account and required

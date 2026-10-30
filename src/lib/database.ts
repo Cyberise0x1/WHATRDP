@@ -21,7 +21,11 @@ export async function getDatabase(): Promise<SqlDatabase> {
   mkdirSync(dirname(file), { recursive: true });
   const sqlite = new DatabaseSync(file);
   const columns = sqlite.prepare("PRAGMA table_info(orders)").all();
-  if (columns.length && !columns.some((column) => column.name === "payment_reference")) {
+  if (
+    columns.length &&
+    (!columns.some((column) => column.name === "payment_reference") ||
+      !columns.some((column) => column.name === "charge_currency"))
+  ) {
     sqlite.close();
     throw new Error(
       "Database requires an approved forward migration; no automatic data conversion was performed",

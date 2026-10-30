@@ -15,12 +15,16 @@ export interface VerifiedPayment {
 export async function acceptVerifiedPayment(store: OrderRepository, payment: VerifiedPayment) {
   const order = await store.byPaymentReference(payment.reference);
   if (!order) return { kind: "unknown" as const };
+  // Validate against what was CHARGED, not the USD cost basis. Legacy orders
+  // without the new columns fall back to amount_cents/currency.
+  const chargedAmount = order.charge_amount_minor ?? order.amount_cents;
+  const chargedCurrency = order.charge_currency ?? order.currency;
   if (
     !payment.paid ||
     payment.orderId !== order.id ||
     payment.orderToken !== order.token ||
-    payment.amount !== order.amount_cents ||
-    payment.currency !== order.currency
+    payment.amount !== chargedAmount ||
+    payment.currency !== chargedCurrency
   ) {
     return { kind: "mismatch" as const };
   }

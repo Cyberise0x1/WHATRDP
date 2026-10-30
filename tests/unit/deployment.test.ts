@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { parse as yaml } from "yaml";
+import { parse as jsonc, type ParseError } from "jsonc-parser";
 import { deploymentConfig, hasRequiredReviewers } from "../../scripts/lib/deployment";
 
 const ids = {
@@ -101,4 +102,42 @@ test("workflow YAML is valid, actions are pinned and deployment is gated", async
       assert.equal(workflow.jobs.deploy.environment, "staging");
     }
   }
+});
+
+test("wrangler bindings match what the application expects", async () => {
+  const errors: ParseError[] = [];
+  const config = jsonc(await readFile("wrangler.jsonc", "utf8"), errors, {
+    allowTrailingComma: true,
+  });
+  assert.deepEqual(errors, []);
+  assert.equal(config.d1_databases[0].binding, "DB");
+  assert.equal(config.assets.binding, "ASSETS");
+  assert.match(config.main, /^\.open-next\//);
+  assert.equal(config.vars.PROVISIONING_ENABLED, "false");
+  assert.equal(config.vars.DEPLOYMENT_TARGET, "cloudflare-staging");
+  assert.equal(config.compatibility_date, "2026-07-01");
+  assert.ok(config.compatibility_flags.includes("nodejs_compat"));
+  assert.ok(config.compatibility_flags.includes("global_fetch_strictly_public"));
+});
+
+test("a custom hostname attaches a route and disables workers.dev", () => {
+  const withHost = deploymentConfig(
+    "production",
+    { ...approved, PRODUCTION_HOSTNAME: "shop.example.com" },
+    {},
+  );
+  assert.equal(withHost.workers_dev, false);
+  assert.deepEqual(withHost.routes, [{ pattern: "shop.example.com", custom_domain: true }]);
+
+  const withoutHost = deploymentConfig("staging", approved, {});
+  assert.equal(withoutHost.workers_dev, true);
+  assert.deepEqual(withoutHost.routes, []);
+
+  assert.throws(() =>
+    deploymentConfig(
+      "production",
+      { ...approved, PRODUCTION_HOSTNAME: "https://bad.example.com/path" },
+      {},
+    ),
+  );
 });

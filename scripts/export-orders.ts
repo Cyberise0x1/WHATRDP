@@ -18,6 +18,10 @@ const columns = [
   "error",
   "payment_reference",
   "currency",
+  "charge_currency",
+  "charge_amount_minor",
+  "fx_rate",
+  "quote_expires_at",
   "created_at",
   "updated_at",
 ];
@@ -55,6 +59,14 @@ export async function exportOrders(source: string, output: string) {
       if (column === "payment_reference" && !available.has(column))
         return "stripe_session AS payment_reference";
       if (column === "currency" && !available.has(column)) return "'USD' AS currency";
+      if (column === "charge_currency" && !available.has(column))
+        return available.has("currency")
+          ? "currency AS charge_currency"
+          : "'USD' AS charge_currency";
+      if (column === "charge_amount_minor" && !available.has(column))
+        return "amount_cents AS charge_amount_minor";
+      if ((column === "fx_rate" || column === "quote_expires_at") && !available.has(column))
+        return `NULL AS ${column}`;
       return column;
     });
     const rows = db.prepare(`SELECT ${select.join(", ")} FROM orders ORDER BY id`).all();

@@ -15,6 +15,10 @@ export interface Order {
   cycle: string;
   amount_cents: number;
   currency: string;
+  charge_currency: string | null;
+  charge_amount_minor: number | null;
+  fx_rate: string | null;
+  quote_expires_at: string | null;
   status: OrderStatus;
   email: string | null;
   service_id: string | null;

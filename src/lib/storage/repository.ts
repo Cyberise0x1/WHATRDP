@@ -16,6 +16,10 @@ const PATCH_KEYS = new Set([
   "error",
   "payment_reference",
   "currency",
+  "charge_currency",
+  "charge_amount_minor",
+  "fx_rate",
+  "quote_expires_at",
 ]);
 
 export class OrderRepository {
@@ -27,12 +31,16 @@ export class OrderRepository {
     cycle: string;
     amountCents: number;
     email?: string | null;
+    chargeCurrency?: string;
+    chargeAmountMinor?: number;
+    fxRate?: string | null;
+    quoteExpiresAt?: string | null;
   }): Promise<Order> {
     const now = new Date().toISOString();
     const row = await this.db
       .prepare(
-        `INSERT INTO orders (token, plan_sku, os, cycle, amount_cents, status, email, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'PENDING_PAYMENT', ?, ?, ?) RETURNING *`,
+        `INSERT INTO orders (token, plan_sku, os, cycle, amount_cents, status, email, charge_currency, charge_amount_minor, fx_rate, quote_expires_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'PENDING_PAYMENT', ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
       .bind(
         randomBytes(24).toString("base64url"),
@@ -41,6 +49,10 @@ export class OrderRepository {
         input.cycle,
         input.amountCents,
         input.email ?? null,
+        input.chargeCurrency ?? "USD",
+        input.chargeAmountMinor ?? input.amountCents,
+        input.fxRate ?? null,
+        input.quoteExpiresAt ?? null,
         now,
         now,
       )
@@ -68,6 +80,25 @@ export class OrderRepository {
       .first<Order>();
   }
 
+  hasWebhookEvent(svixId: string) {
+    if (!svixId) return Promise.resolve(false);
+    return this.db
+      .prepare("SELECT svix_id FROM webhook_events WHERE svix_id = ?")
+      .bind(svixId)
+      .first<{ svix_id: string }>()
+      .then((row) => Boolean(row));
+  }
+
+  async recordWebhookEvent(svixId: string, type: string) {
+    if (!svixId) return;
+    await this.db
+      .prepare(
+        "INSERT OR IGNORE INTO webhook_events (svix_id, type, created_at) VALUES (?, ?, ?) RETURNING svix_id",
+      )
+      .bind(svixId, type, new Date().toISOString())
+      .first<{ svix_id: string }>();
+  }
+
   async update(id: number, patch: Patch): Promise<Order> {
     const entries = Object.entries(patch).filter(([, value]) => value !== undefined);
     if (entries.some(([key]) => !PATCH_KEYS.has(key))) throw new Error("Unsupported order field");
@@ -91,11 +122,13 @@ export class OrderRepository {
   }
 
   // One database write claims a verified payment. Duplicate webhooks cannot win twice.
+  // Compares the CHARGED amount/currency; COALESCE keeps legacy rows (which only
+  // have amount_cents/currency) working until they are backfilled.
   claimPayment(id: number, reference: string, amount: number, currency = "USD") {
     return this.db
       .prepare(
         `UPDATE orders SET status = 'PAID', error = NULL, updated_at = ?
-       WHERE id = ? AND payment_reference = ? AND amount_cents = ? AND currency = ? AND status = 'PENDING_PAYMENT' RETURNING *`,
+       WHERE id = ? AND payment_reference = ? AND COALESCE(charge_amount_minor, amount_cents) = ? AND COALESCE(charge_currency, currency) = ? AND status = 'PENDING_PAYMENT' RETURNING *`,
       )
       .bind(new Date().toISOString(), id, reference, amount, currency)
       .first<Order>();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatUsd } from "@/lib/pricing";
+import { formatMoney } from "@/lib/pricing";
 
 interface OrderView {
   id: number;
@@ -9,6 +9,8 @@ interface OrderView {
   os: string;
   cycle: string;
   amountCents: number;
+  amountMinor?: number;
+  currency?: string;
   status: string;
   ip: string | null;
   error: string | null;
@@ -123,7 +125,7 @@ export function OrderStatus({ token }: { token: string }) {
         </div>
         <div>
           <dt>Paid</dt>
-          <dd>{formatUsd(order.amountCents)}</dd>
+          <dd>{formatMoney(order.amountMinor ?? order.amountCents, order.currency ?? "USD")}</dd>
         </div>
       </dl>
 

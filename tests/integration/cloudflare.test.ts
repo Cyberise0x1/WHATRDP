@@ -21,6 +21,8 @@ import { exportOrders } from "../../scripts/export-orders";
 const APP_SECRET = "fixture-only-key-never-use-for-real-data";
 process.env.APP_SECRET = APP_SECRET;
 const providerSecret = "fixture_provider_signing";
+const zenoSigningKey = "fixture-zeno-signing-key";
+const zenoSecret = `whsec_${Buffer.from(zenoSigningKey).toString("base64")}`;
 let mf: Miniflare;
 let repo: OrderRepository;
 let db: SqlDatabase;
@@ -84,6 +86,7 @@ function options() {
     bindings: {
       APP_SECRET,
       RDPM_WEBHOOK_SECRET: providerSecret,
+      ZENO_WEBHOOK_SECRET: zenoSecret,
       RDP_MONSTER_API_TOKEN: "fixture_not_a_real_token",
       PROVISIONING_ENABLED: "false",
       DEPLOYMENT_TARGET: "cloudflare-staging",
@@ -161,6 +164,18 @@ function signedProvider(body: string, timestamp = String(Math.floor(Date.now() /
     "x-rdpm-timestamp": timestamp,
     "x-rdpm-signature":
       "v1=" + createHmac("sha256", providerSecret).update(`${timestamp}.${body}`).digest("hex"),
+  };
+}
+
+function signedZeno(body: string, id: string, timestamp = String(Math.floor(Date.now() / 1000))) {
+  return {
+    "svix-id": id,
+    "svix-timestamp": timestamp,
+    "svix-signature":
+      "v1," +
+      createHmac("sha256", Buffer.from(zenoSigningKey))
+        .update(`${id}.${timestamp}.${body}`)
+        .digest("base64"),
   };
 }
 
@@ -268,6 +283,46 @@ test("internal payment seam matches amount, currency, ownership and settlement",
   assert.ok(!externalCalls.some((c) => c.endsWith("/servers")));
 });
 
+test("NGN is validated against the charged amount, not the USD cost basis", async () => {
+  const order = await repo.create({
+    planSku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    amountCents: 1599,
+    chargeCurrency: "NGN",
+    chargeAmountMinor: 2_500_000,
+    fxRate: "1562.5",
+  });
+  await repo.update(order.id, { payment_reference: "payment_ngn" });
+  const base = {
+    reference: "payment_ngn",
+    paid: true,
+    orderId: order.id,
+    orderToken: order.token,
+  };
+  // The USD cost basis must NOT settle an NGN charge, and neither may a wrong amount.
+  assert.equal(
+    (await acceptVerifiedPayment(repo, { ...base, amount: 1599, currency: "USD" })).kind,
+    "mismatch",
+  );
+  assert.equal(
+    (await acceptVerifiedPayment(repo, { ...base, amount: 2_500_000, currency: "USD" })).kind,
+    "mismatch",
+  );
+  assert.equal(
+    (await acceptVerifiedPayment(repo, { ...base, amount: 2_500_000, currency: "NGN" })).kind,
+    "paid",
+  );
+
+  const response = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}`);
+  const body = (await response.json()) as {
+    data: { currency: string; amountMinor: number; amountCents: number };
+  };
+  assert.equal(body.data.currency, "NGN");
+  assert.equal(body.data.amountMinor, 2_500_000);
+  assert.equal(body.data.amountCents, 1599);
+});
+
 test("parallel provisioning claims make at most one supplier creation call", async () => {
   const order = await makeOrder();
   await repo.update(order.id, { status: "PAID" });
@@ -354,6 +409,92 @@ test("provider webhook rejects tampering/replays and fetches authoritative state
   assert.equal(updated?.primary_ip, "192.0.2.10");
   assert.equal(updated?.status, "ACTIVE");
   assert.equal(decryptSecret(updated!.password_enc!), "fixture-server-password");
+});
+
+test("zeno webhook settles the charged amount and dedupes deliveries", async () => {
+  const order = await repo.create({
+    planSku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    amountCents: 1599,
+    chargeCurrency: "USD",
+    chargeAmountMinor: 1599,
+  });
+  await repo.update(order.id, { payment_reference: "ch_fixture" });
+  const body = JSON.stringify({
+    type: "checkout.completed",
+    data: {
+      id: "ch_fixture",
+      orderId: String(order.id),
+      priceCurrency: "USD",
+      priceAmount: "15.99",
+      paidAmount: "15.99",
+      status: "COMPLETED",
+      expiresAt: "x",
+      checkoutUrl: "x",
+      createdAt: "x",
+      successRedirectUrl: null,
+    },
+  });
+  const headers = signedZeno(body, "msg_completed");
+  const first = await mf.dispatchFetch("https://fixture.test/api/webhooks/zenobank", {
+    method: "POST",
+    body,
+    headers,
+  });
+  assert.equal(first.status, 200);
+  assert.equal((await repo.byId(order.id))?.status, "PAID");
+
+  // Replay of the same svix-id is acknowledged without a second claim.
+  const replay = await mf.dispatchFetch("https://fixture.test/api/webhooks/zenobank", {
+    method: "POST",
+    body,
+    headers,
+  });
+  assert.equal(replay.status, 200);
+
+  const tampered = await mf.dispatchFetch("https://fixture.test/api/webhooks/zenobank", {
+    method: "POST",
+    body: body + " ",
+    headers,
+  });
+  assert.equal(tampered.status, 401);
+  assert.deepEqual(externalCalls, []);
+});
+
+test("zeno partial payment never settles or provisions", async () => {
+  const order = await repo.create({
+    planSku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    amountCents: 1599,
+    chargeCurrency: "USD",
+    chargeAmountMinor: 1599,
+  });
+  await repo.update(order.id, { payment_reference: "ch_partial" });
+  const body = JSON.stringify({
+    type: "checkout.partially_paid",
+    data: {
+      id: "ch_partial",
+      orderId: String(order.id),
+      priceCurrency: "USD",
+      priceAmount: "15.99",
+      paidAmount: "5.00",
+      status: "PARTIALLY_PAID",
+      expiresAt: "x",
+      checkoutUrl: "x",
+      createdAt: "x",
+      successRedirectUrl: null,
+    },
+  });
+  const response = await mf.dispatchFetch("https://fixture.test/api/webhooks/zenobank", {
+    method: "POST",
+    body,
+    headers: signedZeno(body, "msg_partial"),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await repo.byId(order.id))?.status, "PENDING_PAYMENT");
+  assert.deepEqual(externalCalls, []);
 });
 
 test("unknown order links return 404 without exposing other orders", async () => {

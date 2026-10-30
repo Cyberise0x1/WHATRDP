@@ -85,3 +85,14 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   lockfile over an existing dependency tree can also retain a retired workspace.
   **How to apply:** normalize generated tarball URLs only, preserve integrity
   hashes, and validate a fresh dependency tree when changing package boundaries.
+
+- **D-012 · 2026-10-30 · user** — The GitHub repository `Cyberise0x1/WHATRDP` is
+  **public**, and Cloudflare **Workers Paid ($5/mo)** is subscribed. Publication
+  enables environments, environment secrets, deployment branch policies and
+  required reviewers on the Free plan; `staging`/`production` environments and
+  `main` branch protection (required "Repository checks") are now configured.
+  **Why:** the private Free plan could not create environments/secrets or branch
+  protection, and production required reviewers need a public repo (or Enterprise).
+  **Consequence:** all tracked source and `.agents/memory/` are publicly visible; a
+  secret-pattern scan of tracked files and git history found none, but the owner
+  should still run a dedicated history scanner before treating publication as safe.

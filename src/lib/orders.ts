@@ -76,6 +76,8 @@ export function publicOrder(order: Order) {
     os: order.os,
     cycle: order.cycle,
     amountCents: order.amount_cents,
+    amountMinor: order.charge_amount_minor ?? order.amount_cents,
+    currency: order.charge_currency ?? order.currency,
     status: order.status,
     ip: order.primary_ip,
     error: order.error,

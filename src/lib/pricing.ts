@@ -31,6 +31,14 @@ export function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+export function formatMoney(minor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100);
+  } catch {
+    return `${currency} ${(minor / 100).toFixed(2)}`;
+  }
+}
+
 export function perMonth(cents: number, cycle: Cycle): string {
   return formatUsd(Math.round(cents / CYCLE_MONTHS[cycle]));
 }

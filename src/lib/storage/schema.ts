@@ -17,9 +17,18 @@ CREATE TABLE IF NOT EXISTS orders (
   error TEXT,
   payment_reference TEXT,
   currency TEXT NOT NULL DEFAULT 'USD',
+  charge_currency TEXT,
+  charge_amount_minor INTEGER,
+  fx_rate TEXT,
+  quote_expires_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_service ON orders(service_id);
 CREATE INDEX IF NOT EXISTS idx_orders_payment_reference ON orders(payment_reference);
+CREATE TABLE IF NOT EXISTS webhook_events (
+  svix_id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 `;

@@ -35,6 +35,7 @@ test("historical references export neutrally and old databases are never auto-mi
     const migrated = new DatabaseSync(":memory:");
     migrated.exec(await readFile("migrations/0001_orders.sql", "utf8"));
     migrated.exec(await readFile("migrations/0002_payment_reference.sql", "utf8"));
+    migrated.exec(await readFile("migrations/0003_charge_currency.sql", "utf8"));
     migrated.exec(exported);
     const row = migrated
       .prepare("SELECT payment_reference, password_enc, currency FROM orders")
