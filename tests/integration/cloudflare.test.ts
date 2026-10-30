@@ -218,7 +218,9 @@ test("real Workers runtime serves Next.js SSR and catalogue API", async () => {
   assert.equal(body.data[0].sku, "europe/1");
 });
 
-test("disabled checkout cannot create orders, call a gateway, or provision", async () => {
+// The fixture binds no ZENO_API_KEY, so checkout must fail closed even though
+// CHECKOUT_AVAILABLE is on: no order, no gateway call, no supplier request.
+test("checkout without a configured gateway cannot create orders or provision", async () => {
   for (const body of [
     "{",
     "null",
@@ -266,7 +268,7 @@ test("internal payment seam matches amount, currency, ownership and settlement",
   for (const patch of [
     { paid: false },
     { amount: 1 },
-    { currency: "NGN" },
+    { currency: "EUR" },
     { orderId: 9999 },
     { orderToken: "wrong-token" },
   ]) {
@@ -283,34 +285,41 @@ test("internal payment seam matches amount, currency, ownership and settlement",
   assert.ok(!externalCalls.some((c) => c.endsWith("/servers")));
 });
 
-test("NGN is validated against the charged amount, not the USD cost basis", async () => {
+// Checkout only writes USD, but legacy rows may carry another charged currency.
+// The claim must match that currency and amount, never the USD cost basis.
+test("a legacy non-USD charge is never settled by a USD payment", async () => {
   const order = await repo.create({
     planSku: "europe/1",
     os: "windows-2022",
     cycle: "MONTHLY",
     amountCents: 1599,
-    chargeCurrency: "NGN",
-    chargeAmountMinor: 2_500_000,
-    fxRate: "1562.5",
+    chargeCurrency: "EUR",
+    chargeAmountMinor: 1475,
+    fxRate: "0.9224",
   });
-  await repo.update(order.id, { payment_reference: "payment_ngn" });
+  await repo.update(order.id, { payment_reference: "payment_legacy" });
   const base = {
-    reference: "payment_ngn",
+    reference: "payment_legacy",
     paid: true,
     orderId: order.id,
     orderToken: order.token,
   };
-  // The USD cost basis must NOT settle an NGN charge, and neither may a wrong amount.
+  // The USD cost basis must NOT settle a differently charged row, and neither
+  // may a mismatched amount.
   assert.equal(
     (await acceptVerifiedPayment(repo, { ...base, amount: 1599, currency: "USD" })).kind,
     "mismatch",
   );
   assert.equal(
-    (await acceptVerifiedPayment(repo, { ...base, amount: 2_500_000, currency: "USD" })).kind,
+    (await acceptVerifiedPayment(repo, { ...base, amount: 1475, currency: "USD" })).kind,
     "mismatch",
   );
   assert.equal(
-    (await acceptVerifiedPayment(repo, { ...base, amount: 2_500_000, currency: "NGN" })).kind,
+    (await acceptVerifiedPayment(repo, { ...base, amount: 1, currency: "EUR" })).kind,
+    "mismatch",
+  );
+  assert.equal(
+    (await acceptVerifiedPayment(repo, { ...base, amount: 1475, currency: "EUR" })).kind,
     "paid",
   );
 
@@ -318,8 +327,8 @@ test("NGN is validated against the charged amount, not the USD cost basis", asyn
   const body = (await response.json()) as {
     data: { currency: string; amountMinor: number; amountCents: number };
   };
-  assert.equal(body.data.currency, "NGN");
-  assert.equal(body.data.amountMinor, 2_500_000);
+  assert.equal(body.data.currency, "EUR");
+  assert.equal(body.data.amountMinor, 1475);
   assert.equal(body.data.amountCents, 1599);
 });
 
@@ -546,10 +555,9 @@ test("offline SQLite export round-trips through D1 without changing source or ci
   }
 });
 
-test("public catalogue UI communicates unavailable checkout and disables buttons", async () => {
+test("public catalogue UI offers checkout when the switch is on", async () => {
   const response = await mf.dispatchFetch("https://fixture.test/");
   const html = await response.text();
-  assert.match(html, /Payments unavailable/);
-  assert.match(html, /new orders are currently disabled/);
-  assert.match(html, /disabled="" aria-describedby="checkout-status"/);
+  assert.match(html, />Checkout</);
+  assert.doesNotMatch(html, /Payments unavailable/);
 });

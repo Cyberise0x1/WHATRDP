@@ -96,3 +96,95 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **Consequence:** all tracked source and `.agents/memory/` are publicly visible; a
   secret-pattern scan of tracked files and git history found none, but the owner
   should still run a dedicated history scanner before treating publication as safe.
+
+- **D-013 · 2026-10-30 · user** — Production Cloudflare resources are provisioned
+  manually from a local session: D1 `whatrdp-production` (schema at 0001–0004) and
+  Worker `whatrdp-production` on `*.workers.dev`, with no custom domain and no
+  secrets. Repo variables now describe the production Worker/DB; the release
+  workflow stays disabled (`ENABLE_PRODUCTION_DEPLOYMENTS=false`).
+  **Why:** the account, token and resources were verified available and the owner
+  approved Cloudflare work; provisioning here does not require a release.
+  **Consequence:** production is schema-ready but cannot serve the catalogue until
+  `RDP_MONSTER_API_TOKEN` is set, and it must not be treated as a release target
+  until the `production` environment secrets, `PRODUCTION_POLICY_READ_TOKEN` and
+  required-reviewer policy exist. DNS and `PRODUCTION_HOSTNAME` remain separate
+  approvals; checkout and provisioning stay disabled.
+  **How to apply:** never copy staging secrets into production without approval;
+  record the previous Worker version before any future deploy.
+
+- **D-014 · 2026-10-30 · user** — Production Worker secrets `RDP_MONSTER_API_TOKEN`
+  and `APP_SECRET` were set by the owner in the Cloudflare dashboard (Secret type),
+  after D-013 provisioned the resources. Values were never read back, printed or
+  written to disk; Cloudflare secrets are write-only by design.
+  **Why:** the supplier token could not be mapped programmatically — the API
+  returns secret names only and no local or GitHub copy exists.
+  **Consequence:** production now serves `/api/catalog` 200 and corrects the
+  earlier `502 catalog_unavailable`; `/api/checkout` stays 503
+  `payments_not_configured`. `APP_SECRET` is production-specific, which is safe
+  because that database holds no encrypted records yet — preserve it from here on.
+  **How to apply:** treat the dashboard as the only entry point for these values;
+  future `wrangler deploy` runs retain existing secrets, so releases do not clear
+  them.
+
+- **D-015 · 2026-10-30 · user** — Production is released and public at
+  `https://whatrdp.com`, deployed through **Deploy production** at `c6e4784`
+  after the environment gate (required reviewer, typed `DEPLOY`,
+  `PRODUCTION_POLICY_READ_TOKEN` with Administration read). The custom domain
+  replaced the `*.workers.dev` route, which now returns 1042.
+  **Why:** the owner approved the release path; the domain was the only missing
+  piece for a public storefront.
+  **Consequence:** hosting setup is not launch readiness — `POST /api/checkout`
+  still returns 503 `payments_not_configured` because the route is hard-disabled,
+  and `PROVISIONING_ENABLED` stays `false`. `www.whatrdp.com` has no record and
+  does not resolve; only the apex is attached. The production `CLOUDFLARE_API_TOKEN`
+  is the existing account-wide token, not the least-privilege credential this
+  document asks for.
+  **How to apply:** future production releases use the workflow only, never an
+  ad-hoc `wrangler deploy`; add `www` (record or redirect) as a separate approved
+  change; replacing the Cloudflare credential must not rotate away the account
+  access the workflows depend on.
+
+- **D-016 · 2026-10-30 · user** — The checkout path is wired end to end but
+  remains closed: `POST /api/checkout` validates input, checks the live
+  catalogue/OS, prices the plan, persists a `PENDING_PAYMENT` order, calls Zeno
+  `createCheckout` and stores the checkout reference; `PlansGrid` posts to it.
+  `CHECKOUT_AVAILABLE = false` in `src/lib/checkout-config.ts` keeps the route at
+  503 and the buttons disabled.
+  **Why:** the owner asked for the wiring, but a gateway must be verified against
+  a real account before paid checkout is enabled, and the master switch must not
+  be an environment variable that a deploy could flip.
+  **Consequence:** enabling requires exactly three things — flip that constant,
+  set `ZENO_API_KEY` (plus `ZENO_WEBHOOK_SECRET` for settlement), and take one
+  end-to-end payment on staging. NGN is refused (`currency_not_supported`) until
+  an FX source and quote cache are approved; no KV binding exists yet. A failed
+  gateway call leaves an order with no payment reference, so it can never settle.
+  **How to apply:** never create the order after the gateway call, never send a
+  float to Zeno, and never let the client choose the amount.
+
+- **D-017 · 2026-10-30 · user** — NGN is removed. Checkout, Zeno's
+  `priceCurrency` and all product documentation are **USD-only**; any other
+  currency is refused with `currency_not_supported` before an order exists.
+  Supersedes the currency half of D-006.
+  **Why:** the owner removed the dual-currency requirement, so no FX rate source
+  or quote cache is needed and the earlier open question is closed.
+  **Consequence:** `orders.charge_currency`/`charge_amount_minor`/`fx_rate` stay
+  because `0003_charge_currency.sql` is applied and migrations are immutable; the
+  claim guard still refuses to settle a differently charged legacy row. The
+  applied migration's comment still mentions NGN — it is historical and must not
+  be edited.
+  **How to apply:** new checkout code writes USD only; do not reintroduce a
+  currency selector without a new decision and an approved rate source.
+
+- **D-018 · 2026-10-30 · user** — `CHECKOUT_AVAILABLE` is turned on (D-016 built
+  it) so one real payment can be verified. `ZENO_API_KEY` is set on staging from
+  the owner's existing secret; production keeps its own key and webhook secret.
+  **Why:** the gateway must be proven with a real settlement before it can be
+  trusted, and staging deploys automatically from `main`.
+  **Consequence:** staging can create USD orders and hosted checkouts and will
+  accept real money. Nothing provisions: `PROVISIONING_ENABLED` stays `false` and
+  `provisionOrder` returns early for Cloudflare targets, so a paid staging order
+  is recorded and stops at `PAID`. Production still runs the previous release, so
+  `whatrdp.com` remains closed until a gated production release.
+  **How to apply:** do not release production until Workflows/fulfilment and
+  supplier funding exist, or a customer can pay and receive nothing; a staging
+  payment is the owner's own money and should be treated as a test cost.

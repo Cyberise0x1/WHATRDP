@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { CYCLES, CYCLE_MONTHS, formatUsd, type Cycle } from "@/lib/pricing";
 import type { ShopPlan } from "@/lib/catalog";
 import type { CatalogOs } from "@/lib/rdpmonster";
-import { CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout";
+import { CHECKOUT_AVAILABLE, CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
 
 interface Props {
   plans: ShopPlan[];
@@ -15,6 +15,34 @@ interface Props {
 export function PlansGrid({ plans, osTemplates }: Props) {
   const [cycle, setCycle] = useState<Cycle>("MONTHLY");
   const [os, setOs] = useState<string>(osTemplates[0]?.slug ?? "ubuntu-24-04");
+  const [status, setStatus] = useState<string | null>(
+    CHECKOUT_AVAILABLE ? null : CHECKOUT_UNAVAILABLE_MESSAGE,
+  );
+  const [busySku, setBusySku] = useState<string | null>(null);
+
+  async function startCheckout(sku: string) {
+    setBusySku(sku);
+    setStatus("Starting secure checkout…");
+    try {
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku, os, cycle }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        data?: { checkoutUrl?: string };
+        message?: string;
+      } | null;
+      const checkoutUrl = body?.data?.checkoutUrl;
+      if (!response.ok || !checkoutUrl) {
+        throw new Error(body?.message ?? "Checkout could not be started.");
+      }
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Checkout could not be started.");
+      setBusySku(null);
+    }
+  }
 
   const grouped = useMemo(() => {
     const regions = new Map<string, ShopPlan[]>();
@@ -64,7 +92,7 @@ export function PlansGrid({ plans, osTemplates }: Props) {
       </div>
 
       <div id="checkout-status" className="notice compact" role="status">
-        {CHECKOUT_UNAVAILABLE_MESSAGE}
+        {status}
       </div>
 
       {grouped.map(([region, regionPlans]) => (
@@ -113,10 +141,15 @@ export function PlansGrid({ plans, osTemplates }: Props) {
                         <button
                           type="button"
                           className="button primary full"
-                          disabled
+                          disabled={!CHECKOUT_AVAILABLE || busySku !== null}
                           aria-describedby="checkout-status"
+                          onClick={() => startCheckout(plan.sku)}
                         >
-                          Payments unavailable
+                          {busySku === plan.sku
+                            ? "Starting checkout…"
+                            : CHECKOUT_AVAILABLE
+                              ? "Checkout"
+                              : "Payments unavailable"}
                         </button>
                       </article>
                     );

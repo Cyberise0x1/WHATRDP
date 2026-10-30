@@ -1,8 +1,9 @@
 import type { OrderRepository } from "./storage/repository";
 
 // Internal seam only. A future gateway adapter MUST verify authenticity and
-// authoritative settlement before constructing this confirmation. No HTTP
-// route currently accepts payments or calls this function.
+// authoritative settlement before constructing this confirmation. The Zeno
+// webhook is the only caller, and checkout stays closed while
+// CHECKOUT_AVAILABLE is false.
 export interface VerifiedPayment {
   reference: string;
   orderId: number;

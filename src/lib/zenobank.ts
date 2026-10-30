@@ -2,7 +2,7 @@
 // Contract: https://docs.zenobank.io/api-reference/checkouts/create-a-new-checkout
 // and https://docs.zenobank.io/api-reference/webhooks
 
-export type ZenoCurrency = "USD" | "NGN";
+export type ZenoCurrency = "USD";
 
 export interface ZenoCheckoutRequest {
   orderId: string;

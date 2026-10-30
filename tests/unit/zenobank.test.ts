@@ -36,8 +36,8 @@ test("zeno checkout posts the documented contract", async () => {
     return Response.json({
       id: "ch_fixture",
       orderId: "42",
-      priceCurrency: "NGN",
-      priceAmount: "25000.00",
+      priceCurrency: "USD",
+      priceAmount: "15.99",
       status: "OPEN",
       expiresAt: "2026-01-01T00:00:00Z",
       checkoutUrl: "https://pay.zenobank.io/ch_fixture",
@@ -48,8 +48,8 @@ test("zeno checkout posts the documented contract", async () => {
   try {
     const checkout = await createCheckout({
       orderId: "42",
-      priceAmount: "25000.00",
-      priceCurrency: "NGN",
+      priceAmount: "15.99",
+      priceCurrency: "USD",
       successRedirectUrl: "https://shop.test/success",
     });
     assert.equal(seen?.url, "https://zfixture.test/api/v1/checkouts");
@@ -58,8 +58,8 @@ test("zeno checkout posts the documented contract", async () => {
     assert.equal(sent["Content-Type"], "application/json");
     assert.deepEqual(JSON.parse(String(seen?.init.body)), {
       orderId: "42",
-      priceAmount: "25000.00",
-      priceCurrency: "NGN",
+      priceAmount: "15.99",
+      priceCurrency: "USD",
       successRedirectUrl: "https://shop.test/success",
     });
     assert.equal(checkout.id, "ch_fixture");

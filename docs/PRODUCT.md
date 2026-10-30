@@ -14,13 +14,15 @@ servers; our business handles pricing, payments, support and customer records.
 - Provider HMAC verification and authoritative service-status synchronization.
 - Conditional payment/provisioning claims, bounded read retries and review
   handling for ambiguous billable requests.
-- **No public payment acceptance or new order creation.** Checkout returns 503
-  with `payments_not_configured`; catalogue purchase buttons are disabled.
+- **Checkout is implemented and enabled on staging only** (D-018). A purchase
+  creates a USD order and a Zeno hosted checkout; production still serves the
+  earlier release, so the public site answers 503 `payments_not_configured`.
+  Fulfilment stays disabled: a paid order is recorded but no server is created.
 
 ## Intended launch, not completed features
 
 - Zeno crypto checkout with customer-owned wallet delivery, verified and deduped
-  notifications, authoritative settlement and charged NGN/USD amount matching.
+  notifications, authoritative settlement and charged USD amount matching.
 - Customer ownership checks, account access and restricted support/admin tools.
 - Durable outbox/background fulfilment, recovery and shared supplier rate limits.
 - Explicit renewal, cancellation, partial-payment, refund and dispute policies.

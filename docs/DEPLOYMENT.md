@@ -2,10 +2,27 @@
 
 ## Status and prerequisites
 
-Workflow definitions are prepared, **disabled by default**, and have not been
-run on GitHub or deployed to Cloudflare. The checked-in D1 ID is local-only.
-No GitHub repo push, cloud resource creation, DNS change, secret transfer, live
-payment or supplier purchase is part of repository cleanup.
+**Live resources (updated 2026-10-30).** Both environments are released.
+Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
+`whatrdp-production` (migrations 0001–0004 verified remotely); the public
+`*.workers.dev` route is disabled and the custom domain holds the TLS
+certificate. Staging serves
+`https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
+`APP_SECRET` and `RDP_MONSTER_API_TOKEN` are set on both through the dashboard.
+The storefront renders and `/api/catalog` returns 200. Staging runs with
+checkout enabled (D-018) and the `ZENO_API_KEY` secret, pending one verified
+payment; the released production build still answers 503
+`payments_not_configured`, so no public sales are possible. Fulfilment remains
+disabled in both environments.
+
+Production was released through `Deploy production` at `c6e4784` after the
+environment gate (required reviewer, `PRODUCTION_POLICY_READ_TOKEN`, typed
+`DEPLOY`). `www.whatrdp.com` has **no** DNS record and does not resolve — only the
+apex is attached. The checked-in D1 ID is local-only; real IDs live in repository
+variables.
+
+Both workflows are enabled and have run; production was released manually through
+the gated workflow.
 
 The owner must separately approve repository connection, staging resources,
 least-privilege credentials and any publishing. Checkout remains disabled even

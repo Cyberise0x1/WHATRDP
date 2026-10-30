@@ -19,9 +19,16 @@ SQLite. A conditional update claims payment only for matching reference,
 amount, currency and pending status. A second conditional update records
 provisioning intent before the billable supplier request.
 
-The gateway-neutral payment seam is internal only. A future adapter must verify
-signature and authoritative settlement before constructing a confirmation. There
-is currently no HTTP route that accepts settlement or calls this seam.
+The gateway-neutral payment seam is internal only. A Zeno adapter verifies the
+Svix signature and authoritative settlement before constructing a confirmation.
+`POST /api/checkout` is the only route that creates orders and calls a gateway:
+it validates the request, writes the order (USD cost basis plus charged amount),
+then asks Zeno for a hosted checkout and stores its reference. It fails closed —
+before catalogue access, persistence or any gateway call — while
+`CHECKOUT_AVAILABLE` is false in `src/lib/checkout-config.ts` (currently true on
+staging, still closed on the released production build; D-018), and the webhook is
+the only caller of the settlement seam. Checkout is USD-only; the charged-currency
+columns stay so a legacy row can still never settle the wrong currency.
 
 `migrations/0001_orders.sql` is the immutable historical baseline.
 `0002_payment_reference.sql` adds a neutral reference and USD currency, copying
