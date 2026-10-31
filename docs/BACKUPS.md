@@ -1,8 +1,9 @@
 # D1 backups and restore drill
 
-Status: buckets, lifecycle rules, repository secrets and the first
-staging/production backups exist. The restore drill passed on 2026-10-31. The
-scheduled workflow starts after this change merges to `main`.
+Status: complete. Buckets, lifecycle rules, repository secrets and the first
+staging/production backups exist; the restore drill passed on 2026-10-31. The
+workflow was merged in `fad6ae1` and its manual run `41253477905` succeeded for
+both environments; the daily 03:17 UTC schedule is active.
 
 ## What is backed up, where
 
