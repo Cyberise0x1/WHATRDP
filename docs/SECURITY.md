@@ -2,11 +2,20 @@
 
 ## Current limitations
 
-Paid checkout is unavailable in every environment. No gateway is implemented.
-Existing order URLs are bearer credentials: anyone with a valid link can see
-its order and revealed server credentials. Customer authentication/authorization,
-staff access controls, abuse/rate limiting and durable reconciliation must be
-completed before public sales.
+Checkout is implemented and enabled on staging (D-018); the released production
+build still answers 503. Fulfilment is inert behind `PROVISIONING_ENABLED`
+(D-019), and a five-minute reconciliation run handles stuck orders (D-020).
+
+Order URLs are **bearer credentials**: anyone with a valid link can view that
+order and, once `ACTIVE`, its revealed server credentials. The owner accepted
+bearer links as the access model for the controlled pilot (D-022); customer
+accounts and ownership checks remain future hardening, not a current feature.
+Responses and pages are `private, no-store` with `no-referrer` and
+`X-Robots-Tag: noindex`, and order tokens must never be logged or shared.
+A per-IP checkout rate limit is deployed, and optional Turnstile
+verification is implemented but only active once both keys are configured
+(D-023). Staff access controls and alerting remain open before public
+sales.
 
 ## Secrets and stored data
 

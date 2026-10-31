@@ -35,7 +35,9 @@ export function deploymentConfig(target: string, vars: Variables, base: Record<s
   return {
     ...base,
     name,
-    main: resolve(".open-next/worker.js"),
+    // The custom entry re-exports the generated fetch handler and adds the
+    // provisioning Workflow class.
+    main: resolve("custom-worker.ts"),
     assets: { directory: resolve(".open-next/assets"), binding: "ASSETS" },
     d1_databases: [
       {
@@ -45,7 +47,31 @@ export function deploymentConfig(target: string, vars: Variables, base: Record<s
         migrations_dir: resolve("migrations"),
       },
     ],
-    vars: { PROVISIONING_ENABLED: "false", DEPLOYMENT_TARGET: `cloudflare-${environment}` },
+    // Per-IP checkout limiter; environment-specific namespaces so one environment
+    // cannot consume the other's budget.
+    ratelimits: [
+      {
+        name: "CHECKOUT_RATE_LIMIT",
+        namespace_id: environment === "staging" ? "1001" : "1002",
+        simple: { limit: 5, period: 60 },
+      },
+    ],
+    // Bounded reconciliation of stuck PAID/PROVISIONING orders every five minutes.
+    triggers: { crons: ["*/5 * * * *"] },
+    // Per-environment Workflow; the class is exported from custom-worker.ts.
+    workflows: [
+      {
+        name: `${name}-provision`,
+        binding: "PROVISION_WORKFLOW",
+        class_name: "ProvisionWorkflow",
+      },
+    ],
+    vars: {
+      PROVISIONING_ENABLED: "false",
+      DEPLOYMENT_TARGET: `cloudflare-${environment}`,
+      // Public site key; the secret is a Worker secret set out of band.
+      TURNSTILE_SITE_KEY: vars.TURNSTILE_SITE_KEY?.trim() ?? "",
+    },
     // A configured hostname becomes a custom domain and the public
     // *.workers.dev route is disabled. Without one, the Worker stays on
     // workers.dev only (preview) — production should always set a hostname.

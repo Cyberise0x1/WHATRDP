@@ -1,42 +1,10 @@
-import { createServer, getCredentials, getServer } from "./rdpmonster";
+import { getCredentials, getServer } from "./rdpmonster";
 import { decryptSecret, encryptSecret } from "./crypto";
-import {
-  getOrderByToken,
-  updateOrder,
-  orderRepository,
-  type Order,
-  type OrderStatus,
-} from "./store";
-import { runProvisioning } from "./provisioning";
-
-const ORDER_STATUSES: OrderStatus[] = [
-  "PENDING_PAYMENT",
-  "PAID",
-  "PROVISIONING",
-  "ACTIVE",
-  "FAILED",
-  "CANCELLED",
-];
-
-function mapStatus(remote: string): OrderStatus {
-  if (remote === "TERMINATED") return "CANCELLED";
-  if (remote === "EXPIRED" || remote === "SUSPENDED") return "FAILED";
-  if (remote === "EXPIRING_SOON") return "ACTIVE";
-  return (ORDER_STATUSES as string[]).includes(remote) ? (remote as OrderStatus) : "PROVISIONING";
-}
+import { getOrderByToken, updateOrder, type Order } from "./store";
+import { mapServerStatus } from "./order-status";
 
 export function orderLabel(order: Order): string {
   return `web-${order.token}`;
-}
-
-export async function provisionOrder(order: Order): Promise<Order> {
-  if (process.env.PROVISIONING_ENABLED !== "true") {
-    return order;
-  }
-  // Cloudflare's validated staging mode is intentionally not wired to paid creation.
-  // Queue/outbox activation is a separate approval-gated cutover step.
-  if (process.env.DEPLOYMENT_TARGET?.startsWith("cloudflare")) return order;
-  return (await runProvisioning(await orderRepository(), order.id, createServer)) ?? order;
 }
 
 export async function syncOrder(order: Order, force = false): Promise<Order> {
@@ -49,7 +17,10 @@ export async function syncOrder(order: Order, force = false): Promise<Order> {
     const ip =
       server.ips?.find((entry) => entry.primary)?.address ?? server.ips?.[0]?.address ?? null;
 
-    let current = await updateOrder(order.id, { status: mapStatus(server.status), primary_ip: ip });
+    let current = await updateOrder(order.id, {
+      status: mapServerStatus(server.status),
+      primary_ip: ip,
+    });
 
     if (server.status === "ACTIVE" && !current.password_enc) {
       const credentials = await getCredentials(order.service_id);

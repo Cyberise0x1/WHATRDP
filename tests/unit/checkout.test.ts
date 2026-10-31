@@ -43,9 +43,33 @@ let zenoCalls: { body: Record<string, unknown> }[] = [];
 let orderExistedAtGatewayCall = false;
 let originalFetch: typeof fetch;
 
-function stubGateway(options: { fail?: boolean } = {}) {
+function stubGateway(
+  options: { fail?: boolean; balanceCents?: number; accountFails?: boolean } = {},
+) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes("/account")) {
+      if (options.accountFails) return new Response("upstream error", { status: 500 });
+      return Response.json({
+        data: {
+          email: "fixture@example.com",
+          balanceCents: options.balanceCents ?? 100_000,
+          activeServices: 0,
+          unpaidInvoices: 0,
+          unpaidCents: 0,
+          reseller: { tier: "bronze", discountPercent: 15, turnover30dCents: 0 },
+          rateLimitPerMinute: 120,
+        },
+      });
+    }
+    if (url.includes("turnstile.fixture")) {
+      const params = new URLSearchParams(String(init?.body ?? ""));
+      const good = params.get("response") === "valid-token";
+      return Response.json({
+        success: good,
+        "error-codes": good ? [] : ["invalid-input-response"],
+      });
+    }
     if (url.includes("dashboard.rdp.monster")) {
       return Response.json({ data: catalog });
     }
@@ -81,6 +105,9 @@ before(async () => {
 beforeEach(async () => {
   zenoCalls = [];
   orderExistedAtGatewayCall = false;
+  delete process.env.SUPPLIER_RESERVE_CENTS;
+  delete process.env.TURNSTILE_SECRET_KEY;
+  delete process.env.TURNSTILE_BASE_URL;
   await (await getDatabase()).prepare("DELETE FROM orders").all();
 });
 
@@ -186,4 +213,91 @@ test("amounts are rendered as exact decimal strings", () => {
   for (const invalid of [0, -1, 12.5, Number.NaN]) {
     assert.throws(() => formatAmount(invalid), CheckoutError);
   }
+});
+
+test("a low supplier balance blocks checkout before any order or payment", async () => {
+  stubGateway({ balanceCents: 100 });
+  await assert.rejects(
+    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    (error: unknown) =>
+      error instanceof CheckoutError &&
+      error.code === "insufficient_supplier_balance" &&
+      error.status === 503,
+  );
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+});
+
+test("the renewal reserve is added to the required supplier balance", async () => {
+  process.env.SUPPLIER_RESERVE_CENTS = "5000";
+  // Supplier cost is 764; this balance covers the order but not the reserve.
+  stubGateway({ balanceCents: 1000 });
+  await assert.rejects(
+    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    (error: unknown) =>
+      error instanceof CheckoutError && error.code === "insufficient_supplier_balance",
+  );
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+});
+
+test("an unverifiable supplier balance fails closed", async () => {
+  stubGateway({ accountFails: true });
+  await assert.rejects(
+    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    (error: unknown) =>
+      error instanceof CheckoutError && error.code === "supplier_balance_unavailable",
+  );
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+});
+
+test("a sufficient balance and reserve still creates the order", async () => {
+  process.env.SUPPLIER_RESERVE_CENTS = "5000";
+  stubGateway({ balanceCents: 6000 });
+  const result = await createOrderCheckout({
+    sku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+  });
+  assert.match(result.token, /^[\w-]+$/);
+  assert.equal(zenoCalls.length, 1);
+});
+
+test("Turnstile is enforced only when configured, and requires a token", async () => {
+  process.env.TURNSTILE_SECRET_KEY = "fixture_secret";
+  process.env.TURNSTILE_BASE_URL = "https://turnstile.fixture";
+  stubGateway();
+
+  await assert.rejects(
+    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    (error: unknown) => error instanceof CheckoutError && error.code === "turnstile_required",
+  );
+  await assert.rejects(
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      turnstileToken: "bad-token",
+    }),
+    (error: unknown) => error instanceof CheckoutError && error.code === "turnstile_failed",
+  );
+
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+});
+
+test("a valid Turnstile token allows checkout", async () => {
+  process.env.TURNSTILE_SECRET_KEY = "fixture_secret";
+  process.env.TURNSTILE_BASE_URL = "https://turnstile.fixture";
+  stubGateway();
+
+  const result = await createOrderCheckout({
+    sku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    turnstileToken: "valid-token",
+  });
+  assert.match(result.token, /^[\w-]+$/);
+  assert.equal(zenoCalls.length, 1);
 });

@@ -119,6 +119,61 @@ Protect the output. Test migrations on a disposable copy first. Verify IDs,
 counts, payment references, currency, tokens and decryption using the unchanged
 encryption key. Never import over an existing database by guess.
 
+### Provisioning Workflow
+
+`custom-worker.ts` is the Worker entry in every environment. Deployment
+preparation always points `main` at it — never at the generated
+`.open-next/worker.js` or the test fixture — because the generated module only
+exports `fetch`. The configuration also declares a per-environment Workflow
+(`<worker-name>-provision`, class `ProvisionWorkflow`, binding
+`PROVISION_WORKFLOW`). Deploys keep `PROVISIONING_ENABLED=false`, so a settled
+order stays `PAID` and no Workflow is dispatched. Enabling fulfilment requires
+a reviewed code change to `scripts/lib/deployment.ts` and its tests, followed
+by a funded staging verification. Do not enable it by adding an environment
+variable.
+
+A scheduled handler (`*/5 * * * *` in the generated configuration) reconciles
+at most 25 orders per run: it re-dispatches the Workflow for old `PAID` orders
+(only when enabled), re-syncs `PROVISIONING` orders with a linked service, and
+marks an interrupted claim without one as `REVIEW_REQUIRED`. The schedule is
+part of the reviewed deployment configuration, not a dashboard setting.
+
+Checkout also verifies the live supplier balance before persisting an order and
+adding a Zeno checkout. It requires the plan's supplier cost plus
+`SUPPLIER_RESERVE_CENTS` (a Worker variable; set it to roughly one month of
+renewals). A low balance returns 503 `insufficient_supplier_balance`; an
+unreadable account fails closed with `supplier_balance_unavailable`. Both block
+before any order or payment exists. The blocked path logs
+`checkout_blocked_supplier_balance` with required/available cents and no customer
+data — route that log to the monitoring/alerting work (P2-1). A supplier `402`
+during provisioning still marks that order `FAILED`; the next checkout's live
+balance check is what pauses further sales.
+
+### Abuse protection
+
+Checkout is limited to **5 requests per 60 seconds per client IP** by the
+`CHECKOUT_RATE_LIMIT` binding; exhausted requests return 429 `rate_limited`.
+Staging and production use separate limiter namespaces. The binding is
+fail-open: an absent binding (Node dev) or a limiter error allows the request,
+so a limiter outage does not take the shop down.
+
+Turnstile is **config-gated and must be enabled before public sales**:
+
+- Set the repository variable `TURNSTILE_SITE_KEY` to the public site key. The
+  deploy workflows pass it into the generated Worker vars, and the storefront
+  renders the widget only when it is non-empty.
+- Set the Worker secret `TURNSTILE_SECRET_KEY` (dashboard or
+  `wrangler secret put`) to the matching secret. Never paste it into source,
+  chat, logs or a repository variable.
+- With the secret present, checkout requires a valid token: missing →
+  403 `turnstile_required`, invalid or unverifiable → 403 `turnstile_failed`.
+  With no secret, the challenge is skipped — set both keys together.
+- Provider and payment webhooks are never challenged with Turnstile or the
+  checkout limiter; they verify signatures instead.
+
+Setting `TURNSTILE_SITE_KEY` without the secret leaves the widget visible but
+unverified, and setting only the secret makes checkout fail for every browser.
+
 ## 4. Staging then production
 
 Once explicitly enabled, staging reacts only to successful **push** CI runs on

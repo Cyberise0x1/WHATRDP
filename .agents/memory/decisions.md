@@ -188,3 +188,64 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** do not release production until Workflows/fulfilment and
   supplier funding exist, or a customer can pay and receive nothing; a staging
   payment is the owner's own money and should be treated as a test cost.
+
+- **D-019 · 2026-10-31 · CommandCode** — Durable fulfilment is a Cloudflare
+  Workflow exported from a custom Worker entry (`custom-worker.ts`), replacing
+  the inline creation path. The Workflow claims intent before the billable
+  `POST /servers`, runs creation with `retries.limit = 0`, and polls to `ACTIVE`.
+  `GET /api/orders/[token]` is read-only; the Workflow is the only creation
+  authority. It is implemented inert: `PROVISIONING_ENABLED` stays `false` in
+  every environment, so no Workflow is dispatched and a paid order remains
+  `PAID`. **Why:** D-008/D-011 require intent-before-billing and no automatic
+  repeat; Workflows are the durable primitive, but enabling one must be a
+  deliberate, reviewed change rather than a configuration toggle.
+  **How to apply:** enabling requires editing `scripts/lib/deployment.ts` and
+  its tests, then a funded staging end-to-end verification; never add a
+  provisioning env override, and never re-introduce an inline creator.
+
+- **D-020 · 2026-10-31 · CommandCode** — Stuck orders are reconciled by a
+  five-minute scheduled handler in `custom-worker.ts` (bounded to 25 orders per
+  run): re-dispatch the Workflow for old `PAID` orders only when
+  `PROVISIONING_ENABLED=true`, re-sync `PROVISIONING` orders that have a linked
+  service, and mark an interrupted claim without a service `REVIEW_REQUIRED`.
+  Label reconciliation now walks every page (bounded at 10,000 servers) instead
+  of reading page one. **Why:** at-least-once webhooks plus a lost Workflow
+  dispatch must not leave a paid order indefinitely unfulfilled, and uncertainty
+  must never trigger an automatic second `POST /servers`. **How to apply:** keep
+  the run bounded, keep creation owned by the Workflow, and treat the cron
+  schedule as deployment configuration under review.
+
+- **D-021 · 2026-10-31 · CommandCode** — Checkout verifies the live supplier
+  balance before persisting an order, requiring the plan's supplier cost plus
+  `SUPPLIER_RESERVE_CENTS` (default 0, intended to be ~one month of renewals).
+  A low balance returns 503 `insufficient_supplier_balance`; an unreadable
+  account fails closed with `supplier_balance_unavailable`. The blocked path
+  emits a credential-free `checkout_blocked_supplier_balance` log for alerting.
+  **Why:** prepaid inventory must be funded before it sells, and taking money
+  that cannot be provisioned is worse than refusing the sale. **How to apply:**
+  set the reserve per environment; never remove the check to make a sale go
+  through, and keep `402` from provisioning rather than retrying it.
+
+- **D-022 · 2026-10-31 · user** — Order URLs stay **bearer credentials** for the
+  controlled pilot: the unguessable token itself grants read access to the order
+  and its revealed server credentials. No customer accounts before the pilot.
+  `GET /api/orders/[token]` is read-only; responses and pages keep
+  `private, no-store`, `Referrer-Policy: no-referrer` and `X-Robots-Tag: noindex`.
+  The order page states that anyone with the link can view the credentials.
+  **Why:** accounts are a large identity/session feature, and the owner chose the
+  fastest safe path for a small controlled pilot. **Consequence:** a leaked or
+  guessed link is the whole credential; tokens must never be logged, and accounts
+  remain the required hardening before unrestricted public sales if the owner
+  later changes this decision.
+
+- **D-023 · 2026-10-31 · CommandCode (owner requested Turnstile)** — Abuse
+  protection for checkout: a `CHECKOUT_RATE_LIMIT` binding (5 requests/60 s per
+  client IP, separate staging/production namespaces, fail-open if absent) plus
+  server-side Turnstile verification. Turnstile is config-gated: the public site
+  key is a repository variable (`TURNSTILE_SITE_KEY`), the secret is a Worker
+  secret (`TURNSTILE_SECRET_KEY`); with the secret set, checkout requires a valid
+  token (403 `turnstile_required`/`turnstile_failed`). Webhooks are never
+  challenged. **Why:** irreversible crypto payments need pre-payment screening,
+  and the owner supplied the keys rather than accounts. **How to apply:** set
+  both keys together before public sales, never paste the secret into source or
+  chat, and keep limits off webhook routes.

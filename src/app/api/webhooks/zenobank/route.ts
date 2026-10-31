@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyZenoWebhook, toMinorUnits, type ZenoEvent } from "@/lib/zenobank";
 import { acceptVerifiedPayment } from "@/lib/payments";
 import { orderRepository } from "@/lib/store";
+import { startProvisionWorkflow } from "@/lib/workflow-dispatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,18 @@ export async function POST(request: Request) {
     currency: data.priceCurrency,
     paid: true,
   });
+
+  // Dispatch after settlement. It is inert while PROVISIONING_ENABLED is false,
+  // and a dispatch failure must not undo the recorded payment; the order stays
+  // PAID for reconciliation.
+  if (result.kind === "paid") {
+    try {
+      await startProvisionWorkflow(result.order.id);
+    } catch {
+      // The payment is durable; reconciliation will retry dispatch.
+    }
+  }
+
   await store.recordWebhookEvent(svixId, event.type);
   return NextResponse.json({ received: true, result: result.kind });
 }

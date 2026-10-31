@@ -49,10 +49,23 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
     main: "tests/fixtures/worker-fixture.mjs",
     vars: { PROVISIONING_ENABLED: "true" },
   });
-  assert.match(config.main, /\.open-next\/worker\.js$/);
+  assert.match(config.main, /custom-worker\.ts$/);
   assert.equal(config.vars.PROVISIONING_ENABLED, "false");
   assert.equal(config.d1_databases[0].database_id, ids.staging);
   assert.equal(config.name, approved.STAGING_WORKER_NAME);
+  assert.deepEqual(config.workflows, [
+    {
+      name: "rdpmonster-staging-provision",
+      binding: "PROVISION_WORKFLOW",
+      class_name: "ProvisionWorkflow",
+    },
+  ]);
+  assert.deepEqual(config.triggers, { crons: ["*/5 * * * *"] });
+  assert.equal(config.ratelimits[0].name, "CHECKOUT_RATE_LIMIT");
+  assert.equal(config.ratelimits[0].namespace_id, "1001");
+  assert.equal(config.vars.TURNSTILE_SITE_KEY, "");
+  assert.equal(config.ratelimits[0].name, "CHECKOUT_RATE_LIMIT");
+  assert.equal(config.ratelimits[0].simple.period, 60);
 });
 
 test("production policy requires actual nonempty required-reviewer rules", () => {
@@ -112,9 +125,13 @@ test("wrangler bindings match what the application expects", async () => {
   assert.deepEqual(errors, []);
   assert.equal(config.d1_databases[0].binding, "DB");
   assert.equal(config.assets.binding, "ASSETS");
-  assert.match(config.main, /^\.open-next\//);
+  assert.match(config.main, /custom-worker\.ts$/);
   assert.equal(config.vars.PROVISIONING_ENABLED, "false");
   assert.equal(config.vars.DEPLOYMENT_TARGET, "cloudflare-staging");
+  assert.equal(config.workflows[0].binding, "PROVISION_WORKFLOW");
+  assert.equal(config.workflows[0].class_name, "ProvisionWorkflow");
+  assert.equal(config.workflows[0].name, "rdpmonster-local-provision");
+  assert.deepEqual(config.triggers, { crons: ["*/5 * * * *"] });
   assert.equal(config.compatibility_date, "2026-07-01");
   assert.ok(config.compatibility_flags.includes("nodejs_compat"));
   assert.ok(config.compatibility_flags.includes("global_fetch_strictly_public"));
@@ -129,9 +146,12 @@ test("a custom hostname attaches a route and disables workers.dev", () => {
   assert.equal(withHost.workers_dev, false);
   assert.deepEqual(withHost.routes, [{ pattern: "shop.example.com", custom_domain: true }]);
 
+  assert.equal(withHost.workflows[0].name, "rdpmonster-production-provision");
+
   const withoutHost = deploymentConfig("staging", approved, {});
   assert.equal(withoutHost.workers_dev, true);
   assert.deepEqual(withoutHost.routes, []);
+  assert.equal(withoutHost.workflows[0].name, "rdpmonster-staging-provision");
 
   assert.throws(() =>
     deploymentConfig(
@@ -140,4 +160,18 @@ test("a custom hostname attaches a route and disables workers.dev", () => {
       {},
     ),
   );
+});
+
+test("the public Turnstile site key is carried through and limiters stay per environment", () => {
+  const staging = deploymentConfig(
+    "staging",
+    { ...approved, TURNSTILE_SITE_KEY: "public-site-key" },
+    {},
+  );
+  assert.equal(staging.vars.TURNSTILE_SITE_KEY, "public-site-key");
+  assert.equal(staging.ratelimits[0].namespace_id, "1001");
+
+  const production = deploymentConfig("production", { ...approved }, {});
+  assert.equal(production.vars.TURNSTILE_SITE_KEY, "");
+  assert.equal(production.ratelimits[0].namespace_id, "1002");
 });

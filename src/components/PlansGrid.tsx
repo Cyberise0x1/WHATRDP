@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CYCLES, CYCLE_MONTHS, formatUsd, type Cycle } from "@/lib/pricing";
 import type { ShopPlan } from "@/lib/catalog";
 import type { CatalogOs } from "@/lib/rdpmonster";
@@ -10,9 +10,22 @@ interface Props {
   plans: ShopPlan[];
   osTemplates: CatalogOs[];
   discountPercent: number;
+  turnstileSiteKey?: string;
 }
 
-export function PlansGrid({ plans, osTemplates }: Props) {
+interface TurnstileApi {
+  getResponse(): string | undefined;
+  reset(): void;
+}
+
+function turnstileApi(): TurnstileApi | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { turnstile?: TurnstileApi }).turnstile;
+}
+
+const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+
+export function PlansGrid({ plans, osTemplates, turnstileSiteKey }: Props) {
   const [cycle, setCycle] = useState<Cycle>("MONTHLY");
   const [os, setOs] = useState<string>(osTemplates[0]?.slug ?? "ubuntu-24-04");
   const [status, setStatus] = useState<string | null>(
@@ -20,14 +33,39 @@ export function PlansGrid({ plans, osTemplates }: Props) {
   );
   const [busySku, setBusySku] = useState<string | null>(null);
 
+  // The widget renders implicitly from the .cf-turnstile element once the
+  // script loads. It only appears when a public site key is configured.
+  useEffect(() => {
+    if (!turnstileSiteKey) return;
+    const id = "cf-turnstile-script";
+    if (document.getElementById(id)) return;
+    const script = document.createElement("script");
+    script.id = id;
+    script.src = TURNSTILE_SCRIPT;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }, [turnstileSiteKey]);
+
   async function startCheckout(sku: string) {
+    const turnstileToken = turnstileSiteKey ? turnstileApi()?.getResponse() : undefined;
+    if (turnstileSiteKey && !turnstileToken) {
+      setStatus("Complete the verification challenge, then try again.");
+      return;
+    }
+
     setBusySku(sku);
     setStatus("Starting secure checkout…");
     try {
       const response = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku, os, cycle }),
+        body: JSON.stringify({
+          sku,
+          os,
+          cycle,
+          ...(turnstileToken ? { turnstileToken } : {}),
+        }),
       });
       const body = (await response.json().catch(() => null)) as {
         data?: { checkoutUrl?: string };
@@ -35,6 +73,7 @@ export function PlansGrid({ plans, osTemplates }: Props) {
       } | null;
       const checkoutUrl = body?.data?.checkoutUrl;
       if (!response.ok || !checkoutUrl) {
+        turnstileApi()?.reset();
         throw new Error(body?.message ?? "Checkout could not be started.");
       }
       window.location.assign(checkoutUrl);
@@ -94,6 +133,10 @@ export function PlansGrid({ plans, osTemplates }: Props) {
       <div id="checkout-status" className="notice compact" role="status">
         {status}
       </div>
+
+      {turnstileSiteKey ? (
+        <div className="cf-turnstile" data-sitekey={turnstileSiteKey} data-theme="auto" />
+      ) : null}
 
       {grouped.map(([region, regionPlans]) => (
         <div key={region} className="region-block">

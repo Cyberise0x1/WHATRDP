@@ -88,14 +88,22 @@ export class ApiError extends Error {
   }
 }
 
-function baseUrl(): string {
-  const raw = process.env.RDP_MONSTER_BASE_URL?.trim() || "https://dashboard.rdp.monster/api/v1";
+export interface SupplierAuth {
+  token: string;
+  baseUrl?: string;
+}
+
+function baseUrl(auth?: SupplierAuth): string {
+  const raw =
+    auth?.baseUrl?.trim() ||
+    process.env.RDP_MONSTER_BASE_URL?.trim() ||
+    "https://dashboard.rdp.monster/api/v1";
   const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   return withScheme.replace(/\/$/, "").replace(/\/api\/v1$/, "") + "/api/v1";
 }
 
-function token(): string {
-  const value = process.env.RDP_MONSTER_API_TOKEN?.trim();
+function token(auth?: SupplierAuth): string {
+  const value = (auth?.token ?? process.env.RDP_MONSTER_API_TOKEN)?.trim();
   if (!value) {
     throw new ApiError("RDP_MONSTER_API_TOKEN is not configured", 0, "missing_token");
   }
@@ -107,7 +115,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function api<T>(
   path: string,
   init: RequestInit = {},
-  options: { retries?: number } = {},
+  options: { retries?: number; auth?: SupplierAuth } = {},
 ): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const retries = method === "GET" ? Math.min(3, Math.max(0, options.retries ?? 2)) : 0;
@@ -115,12 +123,12 @@ export async function api<T>(
 
   while (true) {
     attempt += 1;
-    const response = await fetch(`${baseUrl()}${path}`, {
+    const response = await fetch(`${baseUrl(options.auth)}${path}`, {
       ...init,
       cache: "no-store",
       signal: init.signal ?? AbortSignal.timeout(10_000),
       headers: {
-        Authorization: `Bearer ${token()}`,
+        Authorization: `Bearer ${token(options.auth)}`,
         Accept: "application/json",
         "Content-Type": "application/json",
         "User-Agent": "rdpmonster-storefront/1.0",
@@ -172,24 +180,38 @@ export interface Account {
   rateLimitPerMinute: number;
 }
 
-export async function getAccount(): Promise<Account> {
-  const response = await api<{ data: Account }>("/account");
+export async function getAccount(auth?: SupplierAuth): Promise<Account> {
+  const response = await api<{ data: Account }>("/account", {}, { auth });
   return response.data;
 }
 
-export async function getServer(id: string): Promise<Server> {
-  const response = await api<{ data: Server }>(`/servers/${encodeURIComponent(id)}`);
+export async function getServer(id: string, auth?: SupplierAuth): Promise<Server> {
+  const response = await api<{ data: Server }>(`/servers/${encodeURIComponent(id)}`, {}, { auth });
   return response.data;
 }
 
-export async function findServerByLabel(label: string, waitMs = 15_000): Promise<Server | null> {
+export async function findServerByLabel(
+  label: string,
+  waitMs = 15_000,
+  auth?: SupplierAuth,
+): Promise<Server | null> {
   if (!label) return null;
   const deadline = Date.now() + Math.max(0, waitMs);
+  const perPage = 200;
+  const maxPages = 50; // 10,000 servers; a documented bound, not a silent ceiling.
 
   do {
-    const response = await api<{ data: Server[] }>("/servers?perPage=200&page=1");
-    const match = response.data.find((server) => server.label === label);
-    if (match) return match;
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await api<{ data: Server[]; meta?: { total?: number } }>(
+        `/servers?perPage=${perPage}&page=${page}`,
+        {},
+        { auth },
+      );
+      const match = response.data.find((server) => server.label === label);
+      if (match) return match;
+      const total = response.meta?.total;
+      if (!total || response.data.length < perPage || page * perPage >= total) break;
+    }
     if (Date.now() >= deadline) break;
     await sleep(3000);
   } while (Date.now() < deadline);
@@ -197,19 +219,26 @@ export async function findServerByLabel(label: string, waitMs = 15_000): Promise
   return null;
 }
 
-export async function createServer(payload: Record<string, unknown>): Promise<{
+export async function createServer(
+  payload: Record<string, unknown>,
+  auth?: SupplierAuth,
+): Promise<{
   data: Server;
   servers?: Server[];
   invoice?: { id: string; totalCents: number } | null;
   recovered?: boolean;
 }> {
   try {
-    return await api("/servers", { method: "POST", body: JSON.stringify(payload) }, { retries: 0 });
+    return await api(
+      "/servers",
+      { method: "POST", body: JSON.stringify(payload) },
+      { retries: 0, auth },
+    );
   } catch (error) {
     if (!(error instanceof ApiError) || error.status < 500) {
       throw error;
     }
-    const existing = await findServerByLabel(String(payload.label ?? ""));
+    const existing = await findServerByLabel(String(payload.label ?? ""), 15_000, auth);
     if (existing) {
       return { data: existing, servers: [existing], recovered: true };
     }
@@ -222,10 +251,14 @@ export async function createServer(payload: Record<string, unknown>): Promise<{
   }
 }
 
-export async function getCredentials(id: string): Promise<{ user: string; password: string }> {
+export async function getCredentials(
+  id: string,
+  auth?: SupplierAuth,
+): Promise<{ user: string; password: string }> {
   const response = await api<{ data: { user: string; password: string } }>(
     `/servers/${encodeURIComponent(id)}/actions`,
     { method: "POST", body: JSON.stringify({ action: "credentials" }) },
+    { auth },
   );
   return response.data;
 }

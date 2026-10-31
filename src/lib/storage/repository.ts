@@ -145,6 +145,18 @@ export class OrderRepository {
       .first<Order>();
   }
 
+  // Bounded reconciliation query: only settled work that has not moved recently.
+  async stale(cutoff: string, limit = 25) {
+    return (
+      await this.db
+        .prepare(
+          "SELECT * FROM orders WHERE status IN ('PAID','PROVISIONING') AND updated_at < ? ORDER BY updated_at ASC LIMIT ?",
+        )
+        .bind(cutoff, limit)
+        .all<Order>()
+    ).results;
+  }
+
   async recent(limit = 50) {
     return (
       await this.db

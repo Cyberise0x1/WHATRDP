@@ -46,6 +46,7 @@ export default async function HomePage() {
           plans={shop!.plans}
           osTemplates={shop!.catalog.os}
           discountPercent={shop!.discountPercent}
+          turnstileSiteKey={process.env.TURNSTILE_SITE_KEY?.trim() || undefined}
         />
       )}
 

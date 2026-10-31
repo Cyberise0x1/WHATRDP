@@ -17,13 +17,21 @@ servers; our business handles pricing, payments, support and customer records.
 - **Checkout is implemented and enabled on staging only** (D-018). A purchase
   creates a USD order and a Zeno hosted checkout; production still serves the
   earlier release, so the public site answers 503 `payments_not_configured`.
-  Fulfilment stays disabled: a paid order is recorded but no server is created.
+  Fulfilment stays disabled: a paid order is recorded but no server is created. Durable Workflow fulfilment is implemented
+  but inert behind `PROVISIONING_ENABLED=false` (D-019). A five-minute bounded
+  reconciliation run re-syncs stuck orders and re-dispatches unpaid fulfilment
+  only while that switch is on (D-020). Checkout checks the live
+  supplier balance (plus a configurable renewal reserve) before creating an
+  order and fails closed if it cannot be verified (D-021). Checkout is rate-limited per
+  client IP and supports Turnstile verification when both keys are configured
+  (D-023).
 
 ## Intended launch, not completed features
 
 - Zeno crypto checkout with customer-owned wallet delivery, verified and deduped
   notifications, authoritative settlement and charged USD amount matching.
-- Customer ownership checks, account access and restricted support/admin tools.
+- Customer accounts and ownership checks beyond the accepted bearer-link
+  model (D-022), and restricted support/admin tools.
 - Durable outbox/background fulfilment, recovery and shared supplier rate limits.
 - Explicit renewal, cancellation, partial-payment, refund and dispute policies.
 - Invoices, transaction records, support, privacy, terms and abuse procedures.

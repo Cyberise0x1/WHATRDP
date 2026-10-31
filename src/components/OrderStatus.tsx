@@ -170,8 +170,9 @@ export function OrderStatus({ token }: { token: string }) {
           </div>
 
           <p className="muted small">
-            Bookmark this page — it is the only place these credentials are shown. We can reset the
-            password at any time on request.
+            Bookmark this page — it is the only place these credentials are shown. Treat this link
+            as a password: anyone who has it can view these credentials. We can reset the password
+            at any time on request.
           </p>
         </div>
       ) : null}

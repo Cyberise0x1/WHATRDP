@@ -1,6 +1,31 @@
 import type { OrderRepository } from "./storage/repository";
 import type { Server } from "./rdpmonster";
 
+export interface CreateFailure {
+  certainRejection: boolean;
+  message: string;
+}
+
+/** Shared by the inline Node path and the provisioning Workflow. */
+export function classifyCreateFailure(error: unknown): CreateFailure {
+  // A network error or upstream 5xx can occur AFTER the supplier charges us,
+  // so only a definite 4xx (excluding 408) is a rejection.
+  const status =
+    typeof error === "object" && error !== null && "status" in error
+      ? Number((error as { status: unknown }).status)
+      : 0;
+  const certainRejection = status >= 400 && status < 500 && status !== 408;
+  return {
+    certainRejection,
+    message:
+      status === 402
+        ? "Supplier credit is insufficient. Support must review fulfilment."
+        : certainRejection
+          ? "Supplier rejected this order. Contact support."
+          : "Supplier creation outcome is uncertain. Support must reconcile before any retry.",
+  };
+}
+
 export async function runProvisioning(
   store: OrderRepository,
   id: number,
@@ -18,19 +43,10 @@ export async function runProvisioning(
     });
     return await store.update(id, { service_id: response.data.id, error: null });
   } catch (error) {
-    // A network error or upstream 5xx can occur AFTER the supplier charges us.
-    // Never automatically retry creation after such an outcome.
-    const status =
-      typeof error === "object" && error !== null && "status" in error ? Number(error.status) : 0;
-    const certainRejection = status >= 400 && status < 500 && status !== 408;
+    const failure = classifyCreateFailure(error);
     return store.update(id, {
-      status: certainRejection ? "FAILED" : "REVIEW_REQUIRED",
-      error:
-        status === 402
-          ? "Supplier credit is insufficient. Support must review fulfilment."
-          : certainRejection
-            ? "Supplier rejected this order. Contact support."
-            : "Supplier creation outcome is uncertain. Support must reconcile before any retry.",
+      status: failure.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
+      error: failure.message,
     });
   }
 }

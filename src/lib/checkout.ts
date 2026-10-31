@@ -1,7 +1,9 @@
 import { loadShopCatalog, priceForCycle } from "./catalog";
 import { isCycle, type Cycle } from "./pricing";
 import { createOrder, updateOrder } from "./store";
+import { getAccount } from "./rdpmonster";
 import { createCheckout } from "./zenobank";
+import { verifyTurnstile } from "./turnstile";
 
 export type CheckoutCurrency = "USD";
 
@@ -11,6 +13,7 @@ export interface CheckoutInput {
   cycle: Cycle;
   email: string | null;
   currency: CheckoutCurrency;
+  turnstileToken: string | null;
 }
 
 export interface CheckoutResult {
@@ -27,6 +30,16 @@ export class CheckoutError extends Error {
     super(message);
     this.name = "CheckoutError";
   }
+}
+
+/**
+ * Cash buffer kept above the next order's supplier cost. Set
+ * SUPPLIER_RESERVE_CENTS to roughly one month of renewals; an invalid value
+ * falls back to zero rather than blocking every sale.
+ */
+export function renewalReserveCents(raw = process.env.SUPPLIER_RESERVE_CENTS): number {
+  const parsed = Number(raw ?? "0");
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -67,7 +80,19 @@ export function parseCheckoutInput(payload: unknown): CheckoutInput {
     email = candidate;
   }
 
-  return { sku, os, cycle, email, currency: "USD" };
+  let turnstileToken: string | null = null;
+  if (record.turnstileToken !== undefined && record.turnstileToken !== null) {
+    if (typeof record.turnstileToken !== "string" || record.turnstileToken.length > 4096) {
+      throw new CheckoutError(
+        "Complete the human verification challenge",
+        400,
+        "invalid_turnstile",
+      );
+    }
+    turnstileToken = record.turnstileToken.trim() || null;
+  }
+
+  return { sku, os, cycle, email, currency: "USD", turnstileToken };
 }
 
 /** Zeno expects a decimal string; never send a float. */
@@ -87,9 +112,25 @@ export function formatAmount(cents: number): string {
  */
 export async function createOrderCheckout(
   payload: unknown,
-  options: { origin?: string } = {},
+  options: { origin?: string; remoteIp?: string | null } = {},
 ): Promise<CheckoutResult> {
   const input = parseCheckoutInput(payload);
+
+  // Only enforced when the operator has configured the secret; the widget and
+  // the secret must be set together (see docs/DEPLOYMENT.md).
+  if (process.env.TURNSTILE_SECRET_KEY) {
+    const verification = await verifyTurnstile(input.turnstileToken, options.remoteIp ?? null);
+    if (!verification.success) {
+      const missing = verification.codes.includes("missing-token");
+      throw new CheckoutError(
+        missing
+          ? "Complete the human verification challenge and try again."
+          : "Human verification failed. Try again.",
+        403,
+        missing ? "turnstile_required" : "turnstile_failed",
+      );
+    }
+  }
 
   let shop;
   try {
@@ -105,6 +146,38 @@ export async function createOrderCheckout(
   }
 
   const amountCents = priceForCycle(plan, input.cycle);
+
+  const supplierCost = plan.cost[input.cycle];
+  if (typeof supplierCost !== "number" || supplierCost <= 0) {
+    throw new CheckoutError("Supplier pricing is unavailable", 503, "supplier_cost_unavailable");
+  }
+
+  // Fail closed when the live balance cannot be verified: never take money for
+  // fulfilment that cannot be funded.
+  let account;
+  try {
+    account = await getAccount();
+  } catch {
+    throw new CheckoutError(
+      "Sales are paused while supplier capacity is verified. No payment was taken.",
+      503,
+      "supplier_balance_unavailable",
+    );
+  }
+
+  const requiredCents = supplierCost + renewalReserveCents();
+  if (account.balanceCents < requiredCents) {
+    // Structured, credential-free alert input: wire this to monitoring (P2-1).
+    console.warn("checkout_blocked_supplier_balance", {
+      requiredCents,
+      availableCents: account.balanceCents,
+    });
+    throw new CheckoutError(
+      "Sales are temporarily paused while supplier capacity is replenished. No payment was taken.",
+      503,
+      "insufficient_supplier_balance",
+    );
+  }
 
   const order = await createOrder({
     planSku: plan.sku,

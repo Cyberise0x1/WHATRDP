@@ -8,7 +8,23 @@
 import type { SqlDatabase } from "./src/lib/storage/types";
 
 declare global {
+  interface ProvisionWorkflowBinding {
+    create(options: { id?: string; params?: unknown }): Promise<unknown>;
+  }
+
+  interface CheckoutRateLimiter {
+    limit(options: { key: string }): Promise<{ success: boolean }>;
+  }
+
   interface CloudflareEnv {
     DB: SqlDatabase;
+    PROVISION_WORKFLOW: ProvisionWorkflowBinding;
+    CHECKOUT_RATE_LIMIT?: CheckoutRateLimiter;
+    APP_SECRET: string;
+    RDP_MONSTER_API_TOKEN: string;
+    RDP_MONSTER_BASE_URL?: string;
+    TURNSTILE_SITE_KEY?: string;
+    // A runtime string, never a literal, so the 503 gate cannot be constant-folded.
+    PROVISIONING_ENABLED?: string;
   }
 }

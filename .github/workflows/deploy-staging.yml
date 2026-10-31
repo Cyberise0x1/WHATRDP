@@ -39,6 +39,7 @@ jobs:
           STAGING_D1_DATABASE_NAME: ${{ vars.STAGING_D1_DATABASE_NAME }}
           STAGING_D1_DATABASE_ID: ${{ vars.STAGING_D1_DATABASE_ID }}
           STAGING_HOSTNAME: ${{ vars.STAGING_HOSTNAME }}
+          TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
           PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
       - name: Verify schema and deploy the normal Worker
         run: |

@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rdpmonster-staging-validation",
-  "main": ".open-next/worker.js",
+  "main": "./custom-worker.ts",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
@@ -13,9 +13,25 @@
       "migrations_dir": "migrations",
     },
   ],
+  "ratelimits": [
+    {
+      "name": "CHECKOUT_RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 5, "period": 60 },
+    },
+  ],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "workflows": [
+    {
+      "name": "rdpmonster-local-provision",
+      "binding": "PROVISION_WORKFLOW",
+      "class_name": "ProvisionWorkflow",
+    },
+  ],
   "vars": {
     "PROVISIONING_ENABLED": "false",
     "DEPLOYMENT_TARGET": "cloudflare-staging",
+    "TURNSTILE_SITE_KEY": "",
   },
   "observability": { "enabled": true },
 }

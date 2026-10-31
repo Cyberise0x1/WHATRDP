@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { getOrderByToken } from "@/lib/store";
-import { provisionOrder, publicOrder, syncOrder } from "@/lib/orders";
+import { publicOrder, syncOrder } from "@/lib/orders";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Read-only. Fulfilment is owned by the provisioning Workflow; a GET must never
+// create a billable supplier server.
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   const order = await getOrderByToken(token);
@@ -15,9 +17,6 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
   let current = order;
 
   try {
-    if (current.status === "PAID") {
-      current = await provisionOrder(current);
-    }
     if (current.status === "PROVISIONING" || current.service_id) {
       current = await syncOrder(current);
     }
