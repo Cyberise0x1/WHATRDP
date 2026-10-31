@@ -260,3 +260,14 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   customer pay and receive nothing (D-018). **How to apply:** remove the guard
   only in a reviewed change after fulfilment is enabled and one supplier order
   has been verified end to end; never expose production payments via config.
+
+- **D-025 · 2026-10-31 · user (approved release)** — Production released at
+  `66d7652` through the gated **Deploy production** workflow after reviewer
+  approval (run 41202982687, checks and deploy green). Verified live on
+  `whatrdp.com`: root and catalogue 200, Turnstile widget and site key rendered,
+  and `POST /api/checkout` 503 `payments_not_configured` via the D-024 guard.
+  Worker secrets retained, including `TURNSTILE_SECRET_KEY`. Fulfilment stays
+  disabled. **Why:** the owner chose browse-only production while funding and
+  reseller products are pending. **How to apply:** keep production checkout
+  closed until provisioning is enabled and one supplier order is verified end to
+  end; future releases use the workflow only, never an ad-hoc deploy.
