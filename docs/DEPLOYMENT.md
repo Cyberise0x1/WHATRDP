@@ -174,6 +174,16 @@ Turnstile is **config-gated and must be enabled before public sales**:
 Setting `TURNSTILE_SITE_KEY` without the secret leaves the widget visible but
 unverified, and setting only the secret makes checkout fail for every browser.
 
+### Production stays closed
+
+`checkoutEnabled()` (server-side) keeps checkout closed when
+`DEPLOYMENT_TARGET=cloudflare-production`, regardless of `CHECKOUT_AVAILABLE`.
+Staging remains open for controlled testing. This exists because production
+holds Zeno keys: funding the supplier balance must not silently open real
+payments while provisioning is disabled. Removing the guard is a reviewed code
+change, made only after fulfilment is enabled and one supplier order has been
+verified end to end. It is not a configuration toggle.
+
 ## 4. Staging then production
 
 Once explicitly enabled, staging reacts only to successful **push** CI runs on

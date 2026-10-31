@@ -1,4 +1,5 @@
 import { loadShopCatalog } from "@/lib/catalog";
+import { checkoutEnabled } from "@/lib/checkout-policy";
 import { PlansGrid } from "@/components/PlansGrid";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,7 @@ export default async function HomePage() {
           osTemplates={shop!.catalog.os}
           discountPercent={shop!.discountPercent}
           turnstileSiteKey={process.env.TURNSTILE_SITE_KEY?.trim() || undefined}
+          checkoutAvailable={checkoutEnabled()}
         />
       )}
 

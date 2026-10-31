@@ -14,10 +14,10 @@ servers; our business handles pricing, payments, support and customer records.
 - Provider HMAC verification and authoritative service-status synchronization.
 - Conditional payment/provisioning claims, bounded read retries and review
   handling for ambiguous billable requests.
-- **Checkout is implemented and enabled on staging only** (D-018). A purchase
-  creates a USD order and a Zeno hosted checkout; production still serves the
-  earlier release, so the public site answers 503 `payments_not_configured`.
-  Fulfilment stays disabled: a paid order is recorded but no server is created. Durable Workflow fulfilment is implemented
+- **Checkout is implemented and enabled on staging only** (D-018). Production
+  forces checkout closed by server-side policy (D-024), so a public release
+  answers 503 until fulfilment is enabled and verified. Fulfilment stays
+  disabled: a paid order is recorded but no server is created. Durable Workflow fulfilment is implemented
   but inert behind `PROVISIONING_ENABLED=false` (D-019). A five-minute bounded
   reconciliation run re-syncs stuck orders and re-dispatches unpaid fulfilment
   only while that switch is on (D-020). Checkout checks the live

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { CHECKOUT_AVAILABLE, CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
+import { CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
+import { checkoutEnabled } from "@/lib/checkout-policy";
 import { CheckoutError, createOrderCheckout } from "@/lib/checkout";
 import { allowCheckout, type RateLimiterBinding } from "@/lib/abuse";
 
@@ -32,7 +33,7 @@ function remoteIp(request: Request): string | null {
 
 // Fails closed before catalogue access, persistence or any supplier request.
 export async function POST(request: Request) {
-  if (!CHECKOUT_AVAILABLE || !process.env.ZENO_API_KEY?.trim()) return unavailable();
+  if (!checkoutEnabled() || !process.env.ZENO_API_KEY?.trim()) return unavailable();
 
   if (!(await allowCheckout(request, await rateLimiter()))) {
     return NextResponse.json(

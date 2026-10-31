@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { CYCLES, CYCLE_MONTHS, formatUsd, type Cycle } from "@/lib/pricing";
 import type { ShopPlan } from "@/lib/catalog";
 import type { CatalogOs } from "@/lib/rdpmonster";
-import { CHECKOUT_AVAILABLE, CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
+import { CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
 
 interface Props {
   plans: ShopPlan[];
   osTemplates: CatalogOs[];
   discountPercent: number;
   turnstileSiteKey?: string;
+  checkoutAvailable: boolean;
 }
 
 interface TurnstileApi {
@@ -25,11 +26,11 @@ function turnstileApi(): TurnstileApi | undefined {
 
 const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js";
 
-export function PlansGrid({ plans, osTemplates, turnstileSiteKey }: Props) {
+export function PlansGrid({ plans, osTemplates, turnstileSiteKey, checkoutAvailable }: Props) {
   const [cycle, setCycle] = useState<Cycle>("MONTHLY");
   const [os, setOs] = useState<string>(osTemplates[0]?.slug ?? "ubuntu-24-04");
   const [status, setStatus] = useState<string | null>(
-    CHECKOUT_AVAILABLE ? null : CHECKOUT_UNAVAILABLE_MESSAGE,
+    checkoutAvailable ? null : CHECKOUT_UNAVAILABLE_MESSAGE,
   );
   const [busySku, setBusySku] = useState<string | null>(null);
 
@@ -184,13 +185,13 @@ export function PlansGrid({ plans, osTemplates, turnstileSiteKey }: Props) {
                         <button
                           type="button"
                           className="button primary full"
-                          disabled={!CHECKOUT_AVAILABLE || busySku !== null}
+                          disabled={!checkoutAvailable || busySku !== null}
                           aria-describedby="checkout-status"
                           onClick={() => startCheckout(plan.sku)}
                         >
                           {busySku === plan.sku
                             ? "Starting checkout…"
-                            : CHECKOUT_AVAILABLE
+                            : checkoutAvailable
                               ? "Checkout"
                               : "Payments unavailable"}
                         </button>

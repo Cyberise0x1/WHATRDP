@@ -249,3 +249,14 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   and the owner supplied the keys rather than accounts. **How to apply:** set
   both keys together before public sales, never paste the secret into source or
   chat, and keep limits off webhook routes.
+
+- **D-024 · 2026-10-31 · user** — Production checkout stays closed through a
+  server-side policy guard (`src/lib/checkout-policy.ts`):
+  `checkoutEnabled()` returns false when `DEPLOYMENT_TARGET=cloudflare-production`,
+  even though `CHECKOUT_AVAILABLE` is true and staging remains open. The page
+  receives availability as a prop, so the browser never evaluates deployment
+  variables. **Why:** production holds Zeno keys; funding the supplier balance
+  would otherwise open real payments while provisioning is disabled, letting a
+  customer pay and receive nothing (D-018). **How to apply:** remove the guard
+  only in a reviewed change after fulfilment is enabled and one supplier order
+  has been verified end to end; never expose production payments via config.
