@@ -34,7 +34,7 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@opennextjs/cloudflare": "1.20.14",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
