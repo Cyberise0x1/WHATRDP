@@ -126,11 +126,25 @@ preparation always points `main` at it — never at the generated
 `.open-next/worker.js` or the test fixture — because the generated module only
 exports `fetch`. The configuration also declares a per-environment Workflow
 (`<worker-name>-provision`, class `ProvisionWorkflow`, binding
-`PROVISION_WORKFLOW`). Deploys keep `PROVISIONING_ENABLED=false`, so a settled
-order stays `PAID` and no Workflow is dispatched. Enabling fulfilment requires
-a reviewed code change to `scripts/lib/deployment.ts` and its tests, followed
-by a funded staging verification. Do not enable it by adding an environment
-variable.
+`PROVISION_WORKFLOW`). Fulfilment is a per-environment switch,
+`FULFILMENT_ENABLED` in `scripts/lib/deployment.ts`; both environments are
+`false` today, so a settled order stays `PAID` and no Workflow is dispatched.
+The generated deploy configuration always wins over an environment variable or
+the checked-in `wrangler.jsonc`; enabling it by configuration is impossible.
+
+Activation order:
+
+1. Staging only after the supplier balance is funded, reseller products exist
+   and `SUPPLIER_RESERVE_CENTS` is set.
+2. Before merging the flip, review or park any stale `PAID`/`PROVISIONING`
+   orders in staging: the five-minute reconcile dispatches them once enabled.
+3. Set `staging: true`, update the current-state assertion in
+   `tests/unit/deployment.test.ts`, and merge the reviewed change. Staging
+   deploys automatically after green CI.
+4. Verify one paid order reaches `ACTIVE` and reveals credentials.
+5. Set `production: true` only in the same reviewed change that removes the
+   D-024 guard, after step 4. Production stays inert until then, including its
+   reconcile cron.
 
 A scheduled handler (`*/5 * * * *` in the generated configuration) reconciles
 at most 25 orders per run: it re-dispatches the Workflow for old `PAID` orders
@@ -212,6 +226,9 @@ app requires the new columns; reconcile version/schema compatibility explicitly.
 If payments were ever enabled after this cleanup, reconcile post-cutover records
 before restoring an older system. Keep exactly one creation/renewal authority.
 Test backups and restoration on disposable data before the first real cutover.
+
+Scheduled D1 exports, R2 retention and the restore drill are documented in
+[BACKUPS.md](./BACKUPS.md).
 
 Sources:
 [Cloudflare GitHub Actions documentation](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)

@@ -29,6 +29,7 @@
     },
   ],
   "vars": {
+    // Local/dev only; deployments derive this from scripts/lib/deployment.ts.
     "PROVISIONING_ENABLED": "false",
     "DEPLOYMENT_TARGET": "cloudflare-staging",
     "TURNSTILE_SITE_KEY": "",

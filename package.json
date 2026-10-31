@@ -25,6 +25,8 @@
     "test": "npm run test:unit && npm run test:integration",
     "ci": "npm run lint && npm run format:check && npm run typecheck && npm run test:unit && npm run build && npm run cf:build && npm run test:integration && npm run cf:bundle:check",
     "orders:export": "tsx scripts/export-orders-cli.ts",
+    "backup": "tsx scripts/backup-cli.ts run",
+    "backup:verify": "tsx scripts/backup-cli.ts verify",
     "deploy:prepare": "tsx scripts/prepare-deployment.ts",
     "lockfile:normalize": "node scripts/normalize-lockfile.mjs"
   },

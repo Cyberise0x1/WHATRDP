@@ -1,9 +1,30 @@
 import { resolve } from "node:path";
 
-type Environment = "staging" | "production";
+export type Environment = "staging" | "production";
 type Variables = Record<string, string | undefined>;
 
-export function deploymentConfig(target: string, vars: Variables, base: Record<string, unknown>) {
+// The only place fulfilment is enabled. Both entries stay false until:
+//   staging    — supplier balance funded, reseller products defined, reserve set
+//   production — one staging order verified end to end and the D-024 guard removed
+// Changing an entry is a reviewed code change, never configuration (D-019/D-026).
+export const FULFILMENT_ENABLED: Record<Environment, boolean> = {
+  staging: false,
+  production: false,
+};
+
+export function provisioningEnabled(
+  environment: Environment,
+  flags: Record<Environment, boolean> = FULFILMENT_ENABLED,
+): "true" | "false" {
+  return flags[environment] ? "true" : "false";
+}
+
+export function deploymentConfig(
+  target: string,
+  vars: Variables,
+  base: Record<string, unknown>,
+  fulfilment: Record<Environment, boolean> = FULFILMENT_ENABLED,
+) {
   if (target !== "staging" && target !== "production")
     throw new Error("Unknown deployment environment");
   if (vars.DEPLOYMENT_APPROVED !== "true") throw new Error("Deployment is not approved");
@@ -67,7 +88,7 @@ export function deploymentConfig(target: string, vars: Variables, base: Record<s
       },
     ],
     vars: {
-      PROVISIONING_ENABLED: "false",
+      PROVISIONING_ENABLED: provisioningEnabled(environment, fulfilment),
       DEPLOYMENT_TARGET: `cloudflare-${environment}`,
       // Public site key; the secret is a Worker secret set out of band.
       TURNSTILE_SITE_KEY: vars.TURNSTILE_SITE_KEY?.trim() ?? "",

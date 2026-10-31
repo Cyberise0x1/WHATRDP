@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { parse as yaml } from "yaml";
 import { parse as jsonc, type ParseError } from "jsonc-parser";
-import { deploymentConfig, hasRequiredReviewers } from "../../scripts/lib/deployment";
+import {
+  FULFILMENT_ENABLED,
+  deploymentConfig,
+  hasRequiredReviewers,
+  provisioningEnabled,
+} from "../../scripts/lib/deployment";
 
 const ids = {
   staging: "11111111-1111-4111-8111-111111111111",
@@ -66,6 +71,23 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
   assert.equal(config.vars.TURNSTILE_SITE_KEY, "");
   assert.equal(config.ratelimits[0].name, "CHECKOUT_RATE_LIMIT");
   assert.equal(config.ratelimits[0].simple.period, 60);
+});
+
+test("fulfilment is per environment and off until reviewed", () => {
+  assert.deepEqual(FULFILMENT_ENABLED, { staging: false, production: false });
+
+  const stagingOnly = { staging: true, production: false };
+  assert.equal(provisioningEnabled("staging", stagingOnly), "true");
+  assert.equal(provisioningEnabled("production", stagingOnly), "false");
+
+  assert.equal(
+    deploymentConfig("staging", approved, {}, stagingOnly).vars.PROVISIONING_ENABLED,
+    "true",
+  );
+  assert.equal(
+    deploymentConfig("production", approved, {}, stagingOnly).vars.PROVISIONING_ENABLED,
+    "false",
+  );
 });
 
 test("production policy requires actual nonempty required-reviewer rules", () => {

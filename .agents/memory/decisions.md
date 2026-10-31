@@ -271,3 +271,27 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   reseller products are pending. **How to apply:** keep production checkout
   closed until provisioning is enabled and one supplier order is verified end to
   end; future releases use the workflow only, never an ad-hoc deploy.
+
+- **D-026 · 2026-10-31 · CommandCode** — Fulfilment enablement is a
+  per-environment reviewed switch, `FULFILMENT_ENABLED` in
+  `scripts/lib/deployment.ts`. Both environments remain `false`; staging is
+  enabled first after funding and reseller products exist, and production only
+  in the reviewed change that removes the D-024 guard.
+  **Why:** a global flip would arm production's five-minute reconcile cron and
+  could bill the supplier for any pre-existing `PAID` order as soon as staging
+  was enabled. **How to apply:** activation is a one-line map change plus the
+  current-state test update; never add an environment override, and never
+  enable production before one staging order is verified end to end.
+
+- **D-027 · 2026-10-31 · CommandCode** — D1 backups are a scheduled GitHub
+  Actions workflow (`Backup D1 to R2`, daily 03:17 UTC) driving the pinned
+  `wrangler`: export both databases, verify size/checksum/required tables, then
+  upload the dump and a row-count manifest to private `whatrdp-backups-*`
+  buckets under a 35-day `d1/` lifecycle. A restore drill imports into a
+  disposable D1 and fails only when a table is missing or smaller than the
+  export snapshot.
+  **Why:** the export API and multi-GB body are a poor fit for a Worker cron,
+  and backups must not depend on a production-environment reviewer.
+  **How to apply:** keep the buckets private and `BACKUP_CLOUDFLARE_API_TOKEN`
+  dedicated; never attach a dump to a GitHub artifact; the workflow cannot run
+  until R2 is enabled on the account and the two buckets/secrets exist.
