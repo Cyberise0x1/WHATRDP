@@ -145,6 +145,65 @@ export class OrderRepository {
       .first<Order>();
   }
 
+  // Credentials are written once. The CAS makes every concurrent writer safe;
+  // only the winner may notify the customer.
+  claimCredentials(id: number, username: string, passwordEnc: string) {
+    return this.db
+      .prepare(
+        `UPDATE orders SET username = ?, password_enc = ?, updated_at = ?
+       WHERE id = ? AND password_enc IS NULL AND status = 'ACTIVE' RETURNING *`,
+      )
+      .bind(username, passwordEnc, new Date().toISOString(), id)
+      .first<Order>();
+  }
+
+  // One send attempt per claim, spaced by the caller. Attempts are bounded so a
+  // persistent failure cannot notify forever.
+  claimCredentialEmail(id: number, retryAfter: string, maxAttempts = 3) {
+    const now = new Date().toISOString();
+    return this.db
+      .prepare(
+        `UPDATE orders
+       SET credentials_email_attempts = credentials_email_attempts + 1,
+           credentials_email_last_attempt_at = ?,
+           updated_at = ?
+       WHERE id = ? AND status = 'ACTIVE' AND credentials_emailed_at IS NULL
+         AND email IS NOT NULL AND password_enc IS NOT NULL
+         AND credentials_email_attempts < ?
+         AND (credentials_email_last_attempt_at IS NULL OR credentials_email_last_attempt_at < ?)
+       RETURNING *`,
+      )
+      .bind(now, now, id, maxAttempts, retryAfter)
+      .first<Order>();
+  }
+
+  markCredentialEmailSent(id: number) {
+    const now = new Date().toISOString();
+    return this.db
+      .prepare(
+        `UPDATE orders SET credentials_emailed_at = ?, updated_at = ?
+       WHERE id = ? AND credentials_emailed_at IS NULL RETURNING *`,
+      )
+      .bind(now, now, id)
+      .first<Order>();
+  }
+
+  async pendingCredentialEmails(cutoff: string, limit = 5, maxAttempts = 3) {
+    return (
+      await this.db
+        .prepare(
+          `SELECT * FROM orders
+         WHERE status = 'ACTIVE' AND credentials_emailed_at IS NULL
+           AND email IS NOT NULL AND password_enc IS NOT NULL
+           AND credentials_email_attempts < ?
+           AND (credentials_email_last_attempt_at IS NULL OR credentials_email_last_attempt_at < ?)
+         ORDER BY updated_at ASC LIMIT ?`,
+        )
+        .bind(maxAttempts, cutoff, limit)
+        .all<Order>()
+    ).results;
+  }
+
   // Bounded reconciliation query: only settled work that has not moved recently.
   async stale(cutoff: string, limit = 25) {
     return (

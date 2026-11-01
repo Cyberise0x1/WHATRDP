@@ -160,6 +160,10 @@ test("rejects malformed input before catalogue, persistence or the gateway", asy
       code: "currency_not_supported",
     },
     {
+      payload: { sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" },
+      code: "invalid_email",
+    },
+    {
       payload: { sku: "europe/1", os: "windows-2022", cycle: "MONTHLY", email: "nope" },
       code: "invalid_email",
     },
@@ -178,11 +182,21 @@ test("rejects malformed input before catalogue, persistence or the gateway", asy
 test("rejects plans and operating systems that the catalogue does not offer", async () => {
   stubGateway();
   await assert.rejects(
-    createOrderCheckout({ sku: "mars/999", os: "windows-2022", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "mars/999",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) => error instanceof CheckoutError && error.code === "unknown_plan",
   );
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "plan9", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "plan9",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) => error instanceof CheckoutError && error.code === "unknown_os",
   );
   assert.equal((await repo.recent()).length, 0);
@@ -192,7 +206,12 @@ test("rejects plans and operating systems that the catalogue does not offer", as
 test("a failed gateway call leaves an order that can never settle", async () => {
   stubGateway({ fail: true });
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "ANNUALLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "ANNUALLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) =>
       error instanceof CheckoutError &&
       error.code === "gateway_unavailable" &&
@@ -218,7 +237,12 @@ test("amounts are rendered as exact decimal strings", () => {
 test("a low supplier balance blocks checkout before any order or payment", async () => {
   stubGateway({ balanceCents: 100 });
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) =>
       error instanceof CheckoutError &&
       error.code === "insufficient_supplier_balance" &&
@@ -233,7 +257,12 @@ test("the renewal reserve is added to the required supplier balance", async () =
   // Supplier cost is 764; this balance covers the order but not the reserve.
   stubGateway({ balanceCents: 1000 });
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) =>
       error instanceof CheckoutError && error.code === "insufficient_supplier_balance",
   );
@@ -244,7 +273,12 @@ test("the renewal reserve is added to the required supplier balance", async () =
 test("an unverifiable supplier balance fails closed", async () => {
   stubGateway({ accountFails: true });
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) =>
       error instanceof CheckoutError && error.code === "supplier_balance_unavailable",
   );
@@ -259,6 +293,7 @@ test("a sufficient balance and reserve still creates the order", async () => {
     sku: "europe/1",
     os: "windows-2022",
     cycle: "MONTHLY",
+    email: "buyer@example.test",
   });
   assert.match(result.token, /^[\w-]+$/);
   assert.equal(zenoCalls.length, 1);
@@ -270,7 +305,12 @@ test("Turnstile is enforced only when configured, and requires a token", async (
   stubGateway();
 
   await assert.rejects(
-    createOrderCheckout({ sku: "europe/1", os: "windows-2022", cycle: "MONTHLY" }),
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
     (error: unknown) => error instanceof CheckoutError && error.code === "turnstile_required",
   );
   await assert.rejects(
@@ -278,6 +318,7 @@ test("Turnstile is enforced only when configured, and requires a token", async (
       sku: "europe/1",
       os: "windows-2022",
       cycle: "MONTHLY",
+      email: "buyer@example.test",
       turnstileToken: "bad-token",
     }),
     (error: unknown) => error instanceof CheckoutError && error.code === "turnstile_failed",
@@ -296,6 +337,7 @@ test("a valid Turnstile token allows checkout", async () => {
     sku: "europe/1",
     os: "windows-2022",
     cycle: "MONTHLY",
+    email: "buyer@example.test",
     turnstileToken: "valid-token",
   });
   assert.match(result.token, /^[\w-]+$/);

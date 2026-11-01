@@ -29,6 +29,7 @@ const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js"
 export function PlansGrid({ plans, osTemplates, turnstileSiteKey, checkoutAvailable }: Props) {
   const [cycle, setCycle] = useState<Cycle>("MONTHLY");
   const [os, setOs] = useState<string>(osTemplates[0]?.slug ?? "ubuntu-24-04");
+  const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(
     checkoutAvailable ? null : CHECKOUT_UNAVAILABLE_MESSAGE,
   );
@@ -49,6 +50,11 @@ export function PlansGrid({ plans, osTemplates, turnstileSiteKey, checkoutAvaila
   }, [turnstileSiteKey]);
 
   async function startCheckout(sku: string) {
+    if (!email.trim()) {
+      setStatus("Enter an email address so we can send your server details.");
+      return;
+    }
+
     const turnstileToken = turnstileSiteKey ? turnstileApi()?.getResponse() : undefined;
     if (turnstileSiteKey && !turnstileToken) {
       setStatus("Complete the verification challenge, then try again.");
@@ -65,6 +71,7 @@ export function PlansGrid({ plans, osTemplates, turnstileSiteKey, checkoutAvaila
           sku,
           os,
           cycle,
+          email: email.trim(),
           ...(turnstileToken ? { turnstileToken } : {}),
         }),
       });
@@ -118,6 +125,19 @@ export function PlansGrid({ plans, osTemplates, turnstileSiteKey, checkoutAvaila
             ))}
           </div>
         </div>
+
+        <label className="control-group">
+          <span className="control-label">Email</span>
+          <input
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-describedby="checkout-status"
+          />
+        </label>
 
         <label className="control-group">
           <span className="control-label">Operating system</span>

@@ -24,7 +24,8 @@ export async function getDatabase(): Promise<SqlDatabase> {
   if (
     columns.length &&
     (!columns.some((column) => column.name === "payment_reference") ||
-      !columns.some((column) => column.name === "charge_currency"))
+      !columns.some((column) => column.name === "charge_currency") ||
+      !columns.some((column) => column.name === "credentials_emailed_at"))
   ) {
     sqlite.close();
     throw new Error(

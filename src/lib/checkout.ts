@@ -12,7 +12,7 @@ export interface CheckoutInput {
   sku: string;
   os: string;
   cycle: Cycle;
-  email: string | null;
+  email: string;
   currency: CheckoutCurrency;
   turnstileToken: string | null;
 }
@@ -69,16 +69,13 @@ export function parseCheckoutInput(payload: unknown): CheckoutInput {
     throw new CheckoutError("Only USD checkout is enabled", 400, "currency_not_supported");
   }
 
-  let email: string | null = null;
-  if (record.email !== undefined && record.email !== null) {
-    if (typeof record.email !== "string") {
-      throw new CheckoutError("Provide a valid email address", 400, "invalid_email");
-    }
-    const candidate = record.email.trim().toLowerCase();
-    if (candidate.length > 254 || !EMAIL.test(candidate)) {
-      throw new CheckoutError("Provide a valid email address", 400, "invalid_email");
-    }
-    email = candidate;
+  const email = typeof record.email === "string" ? record.email.trim().toLowerCase() : "";
+  if (!email || email.length > 254 || !EMAIL.test(email)) {
+    throw new CheckoutError(
+      "Enter an email address so we can send your server details",
+      400,
+      "invalid_email",
+    );
   }
 
   let turnstileToken: string | null = null;

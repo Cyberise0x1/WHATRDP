@@ -25,6 +25,9 @@ export interface Order {
   primary_ip: string | null;
   username: string | null;
   password_enc: string | null;
+  credentials_emailed_at: string | null;
+  credentials_email_attempts: number;
+  credentials_email_last_attempt_at: string | null;
   error: string | null;
   payment_reference: string | null;
   created_at: string;

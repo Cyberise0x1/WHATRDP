@@ -5,6 +5,7 @@ import type { Server, SupplierAuth } from "./rdpmonster";
 import { classifyCreateFailure } from "./provisioning";
 import { mapServerStatus } from "./order-status";
 import { raiseAlert } from "./alerts";
+import { deliverCredentialsEmail, type DeliveryOutcome, type EmailBinding } from "./email";
 
 // Both the Cloudflare Workflow and the unit tests drive this sequence. The
 // Workflow supplies the real step implementation; tests supply an immediate one.
@@ -13,6 +14,9 @@ export interface ProvisionEnv {
   APP_SECRET: string;
   RDP_MONSTER_API_TOKEN: string;
   RDP_MONSTER_BASE_URL?: string;
+  EMAIL?: EmailBinding;
+  EMAIL_FROM?: string;
+  PUBLIC_BASE_URL?: string;
 }
 
 export interface ProvisionDeps {
@@ -24,6 +28,7 @@ export interface ProvisionDeps {
   getServer: (id: string, auth: SupplierAuth) => Promise<Server>;
   getCredentials: (id: string, auth: SupplierAuth) => Promise<{ user: string; password: string }>;
   encrypt: (plain: string, secret?: string) => string;
+  deliverCredentials?: (order: Order) => Promise<DeliveryOutcome> | DeliveryOutcome;
   step: WorkflowStep;
   pollAttempts?: number;
   pollDelay?: string;
@@ -126,12 +131,21 @@ export async function runProvisionFlow(
     const credentials = await step.do("fetch credentials", { retries: { limit: 2 } }, () =>
       deps.getCredentials(created.id, auth),
     );
-    await step.do("store credentials", { retries: { limit: 0 } }, () =>
-      repo.update(claimed.id, {
-        username: credentials.user,
-        password_enc: deps.encrypt(credentials.password, env.APP_SECRET),
-      }),
+    const stored = await step.do("store credentials", { retries: { limit: 0 } }, () =>
+      repo.claimCredentials(
+        claimed.id,
+        credentials.user,
+        deps.encrypt(credentials.password, env.APP_SECRET),
+      ),
     );
+    if (stored) {
+      // Delivery never throws; a failed email must not fail a fulfilled order.
+      await step.do("send credentials email", { retries: { limit: 0 } }, async () =>
+        deps.deliverCredentials
+          ? await deps.deliverCredentials(stored)
+          : await deliverCredentialsEmail(env, repo, stored),
+      );
+    }
   }
 
   // A paid order whose server is still provisioning is left for the

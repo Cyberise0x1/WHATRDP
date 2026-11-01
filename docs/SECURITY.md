@@ -21,7 +21,13 @@ controls remain open before public sales.
 ## Secrets and stored data
 
 - Runtime bindings: `RDP_MONSTER_API_TOKEN`, `APP_SECRET`, `RDPM_WEBHOOK_SECRET`,
-  `ZENO_WEBHOOK_SECRET`, and the optional `ALERT_WEBHOOK_URL`.
+  `ZENO_WEBHOOK_SECRET`, the optional `ALERT_WEBHOOK_URL`, and the Cloudflare
+  Email Service `EMAIL` send binding with `EMAIL_FROM` / `PUBLIC_BASE_URL` vars.
+- Credential email deliberately contains the server password (owner decision,
+  D-031). It is sent over provider TLS but is stored by the recipient's mail
+  service and survives forwarding: treat the mailbox as part of the credential.
+  The order page remains available, and support can reset the password on
+  request. Never log the address, token, password or the rendered message.
 - Map the existing supplier API key to the expected binding through approved
   secret configuration. The supplier login email/password are not required.
 - Never expose these values in source, `NEXT_PUBLIC_*`, workflow YAML, artifacts,

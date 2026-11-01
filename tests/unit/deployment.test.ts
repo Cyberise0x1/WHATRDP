@@ -69,6 +69,8 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
   assert.equal(config.ratelimits[0].name, "CHECKOUT_RATE_LIMIT");
   assert.equal(config.ratelimits[0].namespace_id, "1001");
   assert.equal(config.vars.TURNSTILE_SITE_KEY, "");
+  assert.equal(config.vars.EMAIL_FROM, "");
+  assert.equal(config.vars.PUBLIC_BASE_URL, "");
   assert.equal(config.ratelimits[0].name, "CHECKOUT_RATE_LIMIT");
   assert.equal(config.ratelimits[0].simple.period, 60);
 });
@@ -154,6 +156,9 @@ test("wrangler bindings match what the application expects", async () => {
   assert.equal(config.workflows[0].class_name, "ProvisionWorkflow");
   assert.equal(config.workflows[0].name, "rdpmonster-local-provision");
   assert.deepEqual(config.triggers, { crons: ["*/5 * * * *"] });
+  assert.deepEqual(config.send_email, [{ name: "EMAIL" }]);
+  assert.equal(config.vars.EMAIL_FROM, "");
+  assert.equal(config.vars.PUBLIC_BASE_URL, "");
   assert.equal(config.compatibility_date, "2026-07-01");
   assert.ok(config.compatibility_flags.includes("nodejs_compat"));
   assert.ok(config.compatibility_flags.includes("global_fetch_strictly_public"));
@@ -196,4 +201,37 @@ test("the public Turnstile site key is carried through and limiters stay per env
   const production = deploymentConfig("production", { ...approved }, {});
   assert.equal(production.vars.TURNSTILE_SITE_KEY, "");
   assert.equal(production.ratelimits[0].namespace_id, "1002");
+});
+
+test("the email sender and public base URL are per environment and validated", () => {
+  const staging = deploymentConfig(
+    "staging",
+    {
+      ...approved,
+      EMAIL_FROM: " WHATRDP <orders@example.test> ",
+      STAGING_PUBLIC_BASE_URL: "https://staging.example.test",
+    },
+    {},
+  );
+  assert.equal(staging.vars.EMAIL_FROM, "WHATRDP <orders@example.test>");
+  assert.equal(staging.vars.PUBLIC_BASE_URL, "https://staging.example.test");
+
+  const production = deploymentConfig(
+    "production",
+    { ...approved, PRODUCTION_PUBLIC_BASE_URL: "https://whatrdp.com" },
+    {},
+  );
+  assert.equal(production.vars.PUBLIC_BASE_URL, "https://whatrdp.com");
+  assert.equal(production.vars.EMAIL_FROM, "");
+
+  for (const invalid of [
+    "http://whatrdp.com",
+    "https://whatrdp.com/path",
+    "https://whatrdp.com/",
+    "not-a-url",
+  ]) {
+    assert.throws(() =>
+      deploymentConfig("production", { ...approved, PRODUCTION_PUBLIC_BASE_URL: invalid }, {}),
+    );
+  }
 });

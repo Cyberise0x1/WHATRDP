@@ -332,6 +332,29 @@ test("a legacy non-USD charge is never settled by a USD payment", async () => {
   assert.equal(body.data.amountCents, 1599);
 });
 
+test("a ready order with credentials is served without touching email egress", async () => {
+  const order = await repo.create({
+    planSku: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    amountCents: 1599,
+    email: "buyer@example.test",
+  });
+  await repo.update(order.id, { status: "ACTIVE", primary_ip: "192.0.2.55" });
+  assert.ok(
+    await repo.claimCredentials(order.id, "Administrator", encryptSecret("fixture-password")),
+  );
+
+  const response = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}`);
+  assert.equal(response.status, 200);
+  const body = (await response.json()) as {
+    data: { credentials: { user: string; password: string } };
+  };
+  assert.equal(body.data.credentials.user, "Administrator");
+  assert.equal(body.data.credentials.password, "fixture-password");
+  assert.deepEqual(externalCalls, [], "no email binding exists in the fixture");
+});
+
 test("parallel provisioning claims make at most one supplier creation call", async () => {
   const order = await makeOrder();
   await repo.update(order.id, { status: "PAID" });

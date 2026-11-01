@@ -1,6 +1,6 @@
 import { getCredentials, getServer } from "./rdpmonster";
 import { decryptSecret, encryptSecret } from "./crypto";
-import { getOrderByToken, updateOrder, type Order } from "./store";
+import { claimCredentials, getOrderById, getOrderByToken, updateOrder, type Order } from "./store";
 import { mapServerStatus } from "./order-status";
 
 export function orderLabel(order: Order): string {
@@ -24,11 +24,10 @@ export async function syncOrder(order: Order, force = false): Promise<Order> {
 
     if (server.status === "ACTIVE" && !current.password_enc) {
       const credentials = await getCredentials(order.service_id);
-      current = await updateOrder(order.id, {
-        status: "ACTIVE",
-        username: credentials.user,
-        password_enc: encryptSecret(credentials.password),
-      });
+      current =
+        (await claimCredentials(order.id, credentials.user, encryptSecret(credentials.password))) ??
+        (await getOrderById(order.id)) ??
+        current;
     }
 
     return current;

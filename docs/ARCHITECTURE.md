@@ -19,7 +19,10 @@ Wrangler-packaged Worker, including its compatibility shims, in workerd.
 `OrderRepository` exposes asynchronous storage operations shared by D1 and
 SQLite. A conditional update claims payment only for matching reference,
 amount, currency and pending status. A second conditional update records
-provisioning intent before the billable supplier request.
+provisioning intent before the billable supplier request. A third claim writes
+credentials exactly once (`password_enc IS NULL AND status = 'ACTIVE'`), and a
+fourth tracks credential-email attempts so at-least-once callers cannot notify
+twice inside the retry window.
 
 The gateway-neutral payment seam is internal only. A Zeno adapter verifies the
 Svix signature and authoritative settlement before constructing a confirmation.
@@ -55,6 +58,11 @@ Durable fulfilment runs in the `ProvisionWorkflow` Cloudflare Workflow exported
 from `custom-worker.ts`: it claims the order, calls `POST /servers` once with
 retries disabled, polls to `ACTIVE`, and stores encrypted credentials. The old
 inline creation path is removed, so the Workflow is the only creation authority.
+Once credentials exist, the Workflow emails them through the Cloudflare Email
+Service binding. Orders whose credentials were stored by the read/webhook path
+are picked up by the same bounded cron, which retries at most three times at
+15-minute spacing; a delivery failure alerts but never changes order state.
+Every send is claimed in D1 first, so normal retries cannot duplicate an email.
 Order-status reads are read-only and never provision. A bounded cron (`*/5 * * * *`)
 re-syncs stuck `PAID`/`PROVISIONING` orders, re-dispatches the Workflow for
 `PAID` only while provisioning is enabled, and marks an interrupted claim with no

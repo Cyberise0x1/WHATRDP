@@ -53,6 +53,18 @@ export function deploymentConfig(
   ) {
     throw new Error("An approved custom hostname must be a bare DNS name");
   }
+  const publicBaseUrl = vars[`${prefix}_PUBLIC_BASE_URL`]?.trim() ?? "";
+  if (publicBaseUrl) {
+    let parsed: URL;
+    try {
+      parsed = new URL(publicBaseUrl);
+    } catch {
+      throw new Error("An approved public base URL must be a bare https:// origin");
+    }
+    if (parsed.protocol !== "https:" || parsed.origin !== publicBaseUrl) {
+      throw new Error("An approved public base URL must be a bare https:// origin");
+    }
+  }
   return {
     ...base,
     name,
@@ -92,6 +104,9 @@ export function deploymentConfig(
       DEPLOYMENT_TARGET: `cloudflare-${environment}`,
       // Public site key; the secret is a Worker secret set out of band.
       TURNSTILE_SITE_KEY: vars.TURNSTILE_SITE_KEY?.trim() ?? "",
+      // Cloudflare Email Service sender and the origin used in order links.
+      EMAIL_FROM: vars.EMAIL_FROM?.trim() ?? "",
+      PUBLIC_BASE_URL: publicBaseUrl,
     },
     // A configured hostname becomes a custom domain and the public
     // *.workers.dev route is disabled. Without one, the Worker stays on

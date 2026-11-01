@@ -31,6 +31,9 @@ export async function recentOrders(limit = 50) {
 export async function claimProvision(id: number) {
   return (await store()).claimProvision(id);
 }
+export async function claimCredentials(id: number, username: string, passwordEnc: string) {
+  return (await store()).claimCredentials(id, username, passwordEnc);
+}
 export async function claimPayment(
   id: number,
   reference: string,

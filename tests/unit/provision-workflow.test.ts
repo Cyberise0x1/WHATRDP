@@ -53,12 +53,13 @@ function server(status: string, ip = "203.0.113.10"): Server {
   };
 }
 
-async function paidOrder() {
+async function paidOrder(email?: string) {
   const order = await repo.create({
     planSku: "europe/1",
     os: "windows-2022",
     cycle: "MONTHLY",
     amountCents: 1599,
+    email,
     chargeCurrency: "USD",
     chargeAmountMinor: 1599,
   });
@@ -100,9 +101,10 @@ test("does nothing while provisioning is disabled", async () => {
 });
 
 test("claims before creating, then persists the service, status and encrypted credentials", async () => {
-  const order = await paidOrder();
+  const order = await paidOrder("buyer@example.test");
   let creates = 0;
   let statusAtCreate: string | undefined;
+  const delivered: number[] = [];
 
   const result = await runProvisionFlow(env, order.id, {
     repo,
@@ -114,6 +116,10 @@ test("claims before creating, then persists the service, status and encrypted cr
     getServer: async () => server("ACTIVE"),
     getCredentials: async () => ({ user: "Administrator", password: "s3cret" }),
     encrypt: encryptSecret,
+    deliverCredentials: (stored) => {
+      delivered.push(stored.id);
+      return "sent";
+    },
     step: immediateStep(),
     pollAttempts: 1,
     pollDelay: "0 seconds",
@@ -122,6 +128,7 @@ test("claims before creating, then persists the service, status and encrypted cr
   assert.equal(result, "active");
   assert.equal(creates, 1);
   assert.equal(statusAtCreate, "PROVISIONING", "intent must be claimed before the billable call");
+  assert.deepEqual(delivered, [order.id], "the credential email is attempted once");
 
   const stored = await repo.byId(order.id);
   assert.equal(stored?.status, "ACTIVE");
@@ -144,6 +151,39 @@ test("claims before creating, then persists the service, status and encrypted cr
   });
   assert.equal(second, "skipped");
   assert.equal(creates, 1);
+});
+
+test("a failed credentials email never fails a fulfilled order", async () => {
+  const order = await paidOrder("buyer@example.test");
+  const result = await runProvisionFlow(
+    {
+      ...env,
+      EMAIL_FROM: "orders@example.test",
+      PUBLIC_BASE_URL: "https://whatrdp.example",
+      EMAIL: {
+        send: async () => {
+          throw new Error("mail unavailable");
+        },
+      },
+    },
+    order.id,
+    {
+      repo,
+      create: async () => ({ data: { id: "srv_1" } }),
+      getServer: async () => server("ACTIVE"),
+      getCredentials: async () => ({ user: "Administrator", password: "s3cret" }),
+      encrypt: encryptSecret,
+      step: immediateStep(),
+      pollAttempts: 1,
+      pollDelay: "0 seconds",
+    },
+  );
+
+  assert.equal(result, "active");
+  const stored = await repo.byId(order.id);
+  assert.equal(stored?.status, "ACTIVE");
+  assert.equal(stored?.credentials_email_attempts, 1);
+  assert.equal(stored?.credentials_emailed_at, null);
 });
 
 test("a definite supplier rejection marks the order FAILED", async () => {

@@ -2,15 +2,18 @@
 
 ## Status and prerequisites
 
-**Live resources (updated 2026-10-30).** Both environments are released.
+**Live resources (updated 2026-11-01).** Both environments are released.
 Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
 `whatrdp-production` (migrations 0001–0005 verified remotely; `0005` applied
-2026-11-01); the public
+2026-11-01). Migration `0006` adds credential-email tracking and must be applied
+before the next release. The public
 `*.workers.dev` route is disabled and the custom domain holds the TLS
 certificate. Staging serves
 `https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
 `APP_SECRET` and `RDP_MONSTER_API_TOKEN` are set on both through the dashboard;
-`ALERT_WEBHOOK_URL` is also set on both (Telegram, 2026-11-01).
+`ALERT_WEBHOOK_URL` is also set on both (Telegram, 2026-11-01). Credential email
+uses the Cloudflare Email Service `send_email` binding (`EMAIL`); it has no API
+key, but the domain must be onboarded and `EMAIL_FROM` set first.
 The storefront renders and `/api/catalog` returns 200. Staging runs with
 checkout enabled (D-018) and the `ZENO_API_KEY` secret, pending one verified
 payment; the released production build still answers 503
@@ -76,6 +79,19 @@ Provision distinct Workers and D1 databases after approval. Names must end in
 | `ENABLE_PRODUCTION_DEPLOYMENTS` | Leave absent/false until production policy/resources are approved                                                               |
 | `STAGING_HOSTNAME`              | Optional custom domain for staging; when set, the public `*.workers.dev` route is disabled and a custom-domain route is created |
 | `PRODUCTION_HOSTNAME`           | Custom domain for production. Set this before a production release; without it the Worker serves only on `*.workers.dev`        |
+| `EMAIL_FROM`                    | Verified Cloudflare Email Service sender, e.g. `WHATRDP <orders@whatrdp.com>`. Empty disables credential email                  |
+| `STAGING_PUBLIC_BASE_URL`       | Bare `https://` origin used in order links, e.g. the staging `*.workers.dev` URL                                                |
+| `PRODUCTION_PUBLIC_BASE_URL`    | Bare `https://` origin used in order links, normally `https://whatrdp.com`                                                      |
+
+### Credential email domain
+
+Onboard `whatrdp.com` under **Email Service** in the Cloudflare dashboard and add
+the SPF, DKIM and DMARC records Cloudflare provides; sending to arbitrary
+customer addresses requires the Workers Paid plan already used by Workflows.
+Keep the records in the same zone as the site. Set `EMAIL_FROM` to an address on
+the onboarded domain and the per-environment `*_PUBLIC_BASE_URL`. Without both
+the binding and the sender, fulfilment still completes and the order page still
+shows credentials; the Worker raises `email_not_configured` instead of sending.
 
 Store **separate** `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` credentials
 in each GitHub environment. Limit tokens to the approved account and required

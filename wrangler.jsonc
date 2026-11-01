@@ -21,6 +21,7 @@
     },
   ],
   "triggers": { "crons": ["*/5 * * * *"] },
+  "send_email": [{ "name": "EMAIL" }],
   "workflows": [
     {
       "name": "rdpmonster-local-provision",
@@ -33,6 +34,8 @@
     "PROVISIONING_ENABLED": "false",
     "DEPLOYMENT_TARGET": "cloudflare-staging",
     "TURNSTILE_SITE_KEY": "",
+    "EMAIL_FROM": "",
+    "PUBLIC_BASE_URL": "",
   },
   "observability": { "enabled": true },
 }

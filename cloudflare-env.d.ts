@@ -16,14 +16,30 @@ declare global {
     limit(options: { key: string }): Promise<{ success: boolean }>;
   }
 
+  interface EmailServiceMessage {
+    from: string;
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+  }
+
+  interface EmailServiceBinding {
+    send(message: EmailServiceMessage): Promise<unknown>;
+  }
+
   interface CloudflareEnv {
     DB: SqlDatabase;
     PROVISION_WORKFLOW: ProvisionWorkflowBinding;
     CHECKOUT_RATE_LIMIT?: CheckoutRateLimiter;
+    EMAIL?: EmailServiceBinding;
     APP_SECRET: string;
     RDP_MONSTER_API_TOKEN: string;
     RDP_MONSTER_BASE_URL?: string;
     TURNSTILE_SITE_KEY?: string;
+    // Credential delivery; absent or empty means no customer email is sent.
+    EMAIL_FROM?: string;
+    PUBLIC_BASE_URL?: string;
     // A runtime string, never a literal, so the 503 gate cannot be constant-folded.
     PROVISIONING_ENABLED?: string;
     // Used by the backup freshness check to pick staging or production.

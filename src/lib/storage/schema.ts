@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS orders (
   charge_amount_minor INTEGER,
   fx_rate TEXT,
   quote_expires_at TEXT,
+  credentials_emailed_at TEXT,
+  credentials_email_attempts INTEGER NOT NULL DEFAULT 0,
+  credentials_email_last_attempt_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

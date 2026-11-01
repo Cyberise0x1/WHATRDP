@@ -345,3 +345,23 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** add new events to `supplier-events.ts`, not to the route;
   never accept a signature format that is not derived from the configured
   secret; invalid signatures stay a `401` without an alert.
+
+- **D-031 · 2026-11-01 · user (provider and content), CommandCode (delivery
+  policy)** — Credentials are emailed when an order becomes `ACTIVE`, using the
+  Cloudflare Email Service `send_email` binding (`EMAIL`) with no API key or
+  npm dependency. Checkout now requires an email address. The message contains
+  the IP, username, password, plan and order link (owner chose full credentials
+  over a link-only message). Delivery is claimed in D1 before sending and marked
+  after success; the Workflow sends once, and the five-minute cron sweeps orders
+  whose credentials were stored by the request path, retrying at most three
+  times 15 minutes apart. An absent sender/binding raises
+  `email_not_configured` and never consumes an attempt; failed attempts raise
+  `credentials_email_failed`, and the third raises `credentials_email_exhausted`.
+  **Why:** fulfilment must not depend on a notification, and sending is not
+  billable, so a bounded at-least-once retry is preferable to a lost password.
+  A crash between send and mark can duplicate one email, which is preferable to
+  silence.
+  **How to apply:** onboard `whatrdp.com` in Email Service with SPF/DKIM/DMARC,
+  set `EMAIL_FROM` and the per-environment `*_PUBLIC_BASE_URL`, and apply
+  `0006_credentials_email.sql` before the next release. Never log the address,
+  password or message body; keep the order page as the durable fallback.

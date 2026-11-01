@@ -29,6 +29,7 @@ test("historical references export neutrally and old databases are never auto-mi
     assert.match(exported, /payment_reference, currency/);
     assert.match(exported, /'historical-reference', 'USD'/);
     assert.match(exported, /unchanged-ciphertext/);
+    assert.match(exported, /credentials_email_attempts/);
     process.env.DATABASE_PATH = file;
     await assert.rejects(getDatabase(), /approved forward migration/);
     assert.deepEqual(await readFile(file), bytes);
@@ -36,6 +37,7 @@ test("historical references export neutrally and old databases are never auto-mi
     migrated.exec(await readFile("migrations/0001_orders.sql", "utf8"));
     migrated.exec(await readFile("migrations/0002_payment_reference.sql", "utf8"));
     migrated.exec(await readFile("migrations/0003_charge_currency.sql", "utf8"));
+    migrated.exec(await readFile("migrations/0006_credentials_email.sql", "utf8"));
     migrated.exec(exported);
     const row = migrated
       .prepare("SELECT payment_reference, password_enc, currency FROM orders")

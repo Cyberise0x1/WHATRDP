@@ -22,6 +22,9 @@ const columns = [
   "charge_amount_minor",
   "fx_rate",
   "quote_expires_at",
+  "credentials_emailed_at",
+  "credentials_email_attempts",
+  "credentials_email_last_attempt_at",
   "created_at",
   "updated_at",
 ];
@@ -67,6 +70,13 @@ export async function exportOrders(source: string, output: string) {
         return "amount_cents AS charge_amount_minor";
       if ((column === "fx_rate" || column === "quote_expires_at") && !available.has(column))
         return `NULL AS ${column}`;
+      if (
+        (column === "credentials_emailed_at" || column === "credentials_email_last_attempt_at") &&
+        !available.has(column)
+      )
+        return `NULL AS ${column}`;
+      if (column === "credentials_email_attempts" && !available.has(column))
+        return `0 AS ${column}`;
       return column;
     });
     const rows = db.prepare(`SELECT ${select.join(", ")} FROM orders ORDER BY id`).all();

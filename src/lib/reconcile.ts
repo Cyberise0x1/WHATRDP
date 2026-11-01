@@ -1,10 +1,11 @@
 import { OrderRepository } from "./storage/repository";
-import type { SqlDatabase } from "./storage/types";
+import type { Order, SqlDatabase } from "./storage/types";
 import type { Server } from "./rdpmonster";
 import { getCredentials, getServer } from "./rdpmonster";
 import { encryptSecret } from "./crypto";
 import { mapServerStatus } from "./order-status";
 import { raiseAlert } from "./alerts";
+import { deliverCredentialsEmail, type DeliveryOutcome, type EmailBinding } from "./email";
 
 export interface WorkflowCreator {
   create(options: { id?: string; params?: unknown }): Promise<unknown>;
@@ -17,6 +18,9 @@ export interface ReconcileEnv {
   APP_SECRET: string;
   RDP_MONSTER_API_TOKEN: string;
   RDP_MONSTER_BASE_URL?: string;
+  EMAIL?: EmailBinding;
+  EMAIL_FROM?: string;
+  PUBLIC_BASE_URL?: string;
 }
 
 export interface ReconcileDeps {
@@ -27,6 +31,7 @@ export interface ReconcileDeps {
     auth: { token: string; baseUrl?: string },
   ) => Promise<{ user: string; password: string }>;
   encrypt?: (plain: string, secret?: string) => string;
+  deliverCredentials?: (order: Order) => Promise<DeliveryOutcome> | DeliveryOutcome;
   now?: () => Date;
   limit?: number;
   staleAfterMs?: number;
@@ -37,9 +42,12 @@ export interface ReconcileResult {
   dispatched: number;
   synced: number;
   reviewed: number;
+  emailed: number;
 }
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
+const EMAIL_RETRY_AFTER_MS = 15 * 60 * 1000;
+const EMAIL_BUCKET = 5;
 const DEFAULT_LIMIT = 25;
 
 /**
@@ -62,12 +70,16 @@ export async function reconcileOrders(
   const fetchServer = deps.getServer ?? getServer;
   const fetchCredentials = deps.getCredentials ?? getCredentials;
   const encrypt = deps.encrypt ?? encryptSecret;
-  const now = deps.now?.() ?? new Date();
+  const nowDate = deps.now?.() ?? new Date();
   const limit = deps.limit ?? DEFAULT_LIMIT;
-  const cutoff = new Date(now.getTime() - (deps.staleAfterMs ?? STALE_AFTER_MS)).toISOString();
+  const cutoff = new Date(nowDate.getTime() - (deps.staleAfterMs ?? STALE_AFTER_MS)).toISOString();
   const auth = { token: env.RDP_MONSTER_API_TOKEN, baseUrl: env.RDP_MONSTER_BASE_URL };
 
-  const result: ReconcileResult = { scanned: 0, dispatched: 0, synced: 0, reviewed: 0 };
+  const deliver =
+    deps.deliverCredentials ??
+    ((order: Order) => deliverCredentialsEmail(env, repo, order, { now: deps.now }));
+
+  const result: ReconcileResult = { scanned: 0, dispatched: 0, synced: 0, reviewed: 0, emailed: 0 };
   const stale = await repo.stale(cutoff, limit);
 
   for (const order of stale) {
@@ -131,11 +143,17 @@ export async function reconcileOrders(
       }
       if (server.status === "ACTIVE" && !current.password_enc) {
         const credentials = await fetchCredentials(order.service_id, auth);
-        current = await repo.update(order.id, {
-          status: "ACTIVE",
-          username: credentials.user,
-          password_enc: encrypt(credentials.password, env.APP_SECRET),
-        });
+        const stored = await repo.claimCredentials(
+          order.id,
+          credentials.user,
+          encrypt(credentials.password, env.APP_SECRET),
+        );
+        if (stored) {
+          current = stored;
+          await deliver(stored);
+        } else {
+          current = (await repo.byId(order.id)) ?? current;
+        }
       }
       result.synced += 1;
     } catch {
@@ -150,6 +168,14 @@ export async function reconcileOrders(
         cooldownMs: 60 * 60 * 1000,
       });
     }
+  }
+
+  // Credentials can be stored by the request path, which cannot reach the
+  // Email binding. Sweep those orders here with the same bounded retry rule.
+  const emailCutoff = new Date(nowDate.getTime() - EMAIL_RETRY_AFTER_MS).toISOString();
+  const pending = await repo.pendingCredentialEmails(emailCutoff, EMAIL_BUCKET);
+  for (const order of pending) {
+    if ((await deliver(order)) === "sent") result.emailed += 1;
   }
 
   return result;

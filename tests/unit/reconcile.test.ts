@@ -148,6 +148,7 @@ test("a provisioning order with a service is synced, and credentials are stored 
     getServer: async () => server("ACTIVE"),
     getCredentials: async () => ({ user: "Administrator", password: "s3cret" }),
     encrypt: encryptSecret,
+    deliverCredentials: () => "skipped",
   });
   assert.equal(result.synced, 1);
   const stored = await repo.byId(stale.id);
@@ -180,4 +181,48 @@ test("each run is bounded by the limit", async () => {
   const result = await reconcileOrders(env, { repo, limit: 2 });
   assert.equal(result.scanned, 2);
   assert.equal(dispatched.length, 2);
+});
+
+test("a ready order is swept for its credentials email and marked sent", async () => {
+  const order = await makeOrder("ACTIVE");
+  await repo.update(order.id, { email: "buyer@example.test", primary_ip: "203.0.113.10" });
+  assert.ok(
+    await repo.claimCredentials(order.id, "Administrator", encryptSecret("s3cret", SECRET)),
+  );
+
+  const sent: { to: string; text: string }[] = [];
+  const mailEnv = {
+    ...env,
+    EMAIL: {
+      send: async (message: { to: string; text: string }) => {
+        sent.push(message);
+        return {};
+      },
+    },
+    EMAIL_FROM: "orders@example.test",
+    PUBLIC_BASE_URL: "https://whatrdp.example",
+  };
+
+  const result = await reconcileOrders(mailEnv, { repo });
+  assert.equal(result.emailed, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "buyer@example.test");
+  assert.match(sent[0].text, /203\.0\.113\.10/);
+  assert.ok((await repo.byId(order.id))?.credentials_emailed_at);
+
+  const again = await reconcileOrders(mailEnv, { repo });
+  assert.equal(again.emailed, 0);
+  assert.equal(sent.length, 1);
+});
+
+test("the email sweep is inert without Email Service configuration", async () => {
+  const order = await makeOrder("ACTIVE");
+  await repo.update(order.id, { email: "buyer@example.test" });
+  assert.ok(
+    await repo.claimCredentials(order.id, "Administrator", encryptSecret("s3cret", SECRET)),
+  );
+
+  const result = await reconcileOrders(env, { repo });
+  assert.equal(result.emailed, 0);
+  assert.equal((await repo.byId(order.id))?.credentials_email_attempts, 0);
 });
