@@ -325,3 +325,23 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   it does not have. **How to apply:** apply
   `migrations/0005_backup_heartbeat.sql` before the next scheduled backup; never
   write the heartbeat before both uploads.
+
+- **D-030 · 2026-11-01 · CommandCode** — Supplier webhook events are classified
+  in `src/lib/supplier-events.ts`: lifecycle events (`server.created`,
+  `server.delivered`, `server.renewed`, `server.suspended`, `server.deleted`)
+  trigger an authoritative resync, `service.expiring` flags the order, invoices
+  (`invoice.created`, `invoice.paid`) are acknowledged without touching an
+  order, `payment.failed` raises the critical `supplier_payment_failed` alert,
+  and unknown events are acknowledged and ignored. Signature verification
+  accepts `v1=<hex>` over `timestamp.body`, a bare hex signature, and a
+  `whsec_…` secret used either as displayed or base64-decoded.
+  **Why:** delivery is at-least-once, so an unrecognised event must not answer
+  `5xx` and invite retries; billing events have no order row to update, and a
+  failed supplier payment needs a human. The newer webhook API shows the secret
+  in Standard Webhooks form, and rejecting every delivery because of a display
+  format would silently stop fulfilment. All accepted candidates are still an
+  HMAC of the same timestamp and raw body with the configured secret, compared
+  in constant time.
+  **How to apply:** add new events to `supplier-events.ts`, not to the route;
+  never accept a signature format that is not derived from the configured
+  secret; invalid signatures stay a `401` without an alert.

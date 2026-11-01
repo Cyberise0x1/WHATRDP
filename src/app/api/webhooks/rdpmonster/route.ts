@@ -3,6 +3,7 @@ import { verifyWebhook } from "@/lib/signature";
 import { getOrderByServiceId, updateOrder } from "@/lib/store";
 import { syncOrder } from "@/lib/orders";
 import { raiseAlert } from "@/lib/alerts";
+import { classifySupplierEvent } from "@/lib/supplier-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +44,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
+  const kind = classifySupplierEvent(payload.event);
+
+  // Billing events do not map to one of our order rows. Invoices are expected;
+  // a failed payment needs a human.
+  if (kind === "invoice") {
+    return NextResponse.json({ received: true, ignored: payload.event });
+  }
+  if (kind === "payment_failed") {
+    raiseAlert({
+      code: "supplier_payment_failed",
+      severity: "critical",
+      message: "The supplier reported a failed payment",
+      context: { provider: "rdpmonster", type: payload.event },
+    });
+    return NextResponse.json({ received: true });
+  }
+  if (kind === "unknown") {
+    return NextResponse.json({ received: true, ignored: payload.event ?? "unknown event" });
+  }
+
   const serviceId = payload.data?.serviceId;
   if (!serviceId) {
     return NextResponse.json({ received: true, ignored: "no serviceId" });
@@ -62,20 +83,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, ignored: "unknown service" });
     }
 
-    switch (payload.event) {
-      case "server.created":
-      case "server.delivered":
-      case "server.renewed":
-      case "server.suspended":
-      case "server.deleted":
-        // Provider data is authoritative; do not trust event-supplied status or IP.
-        await syncOrder(order, true);
-        break;
-      case "service.expiring":
-        await updateOrder(order.id, { error: "Service is expiring soon" });
-        break;
-      default:
-        break;
+    if (kind === "sync") {
+      // Provider data is authoritative; do not trust event-supplied status or IP.
+      await syncOrder(order, true);
+    } else {
+      await updateOrder(order.id, { error: "Service is expiring soon" });
     }
   } catch {
     raiseAlert({

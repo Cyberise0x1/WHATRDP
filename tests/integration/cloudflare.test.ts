@@ -420,6 +420,28 @@ test("provider webhook rejects tampering/replays and fetches authoritative state
   assert.equal(decryptSecret(updated!.password_enc!), "fixture-server-password");
 });
 
+test("provider billing events are acknowledged without touching an order", async () => {
+  for (const event of ["invoice.created", "invoice.paid"]) {
+    const body = JSON.stringify({ event, data: {} });
+    const response = await mf.dispatchFetch("https://fixture.test/api/webhooks/rdpmonster", {
+      method: "POST",
+      body,
+      headers: signedProvider(body),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { received: true, ignored: event });
+  }
+
+  const failed = JSON.stringify({ event: "payment.failed", data: {} });
+  const response = await mf.dispatchFetch("https://fixture.test/api/webhooks/rdpmonster", {
+    method: "POST",
+    body: failed,
+    headers: signedProvider(failed),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { received: true });
+});
+
 test("zeno webhook settles the charged amount and dedupes deliveries", async () => {
   const order = await repo.create({
     planSku: "europe/1",

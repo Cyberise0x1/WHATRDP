@@ -75,6 +75,7 @@ keys and masks email addresses and `rdpm_`/`sk_`/`whsec_`-style values.
 | `zeno_webhook_failed`               | critical | a verified Zeno webhook could not be processed                     |
 | `supplier_webhook_unmatched`        | warning  | a verified supplier webhook referenced an unknown service          |
 | `supplier_webhook_failed`           | critical | a verified supplier webhook could not be processed                 |
+| `supplier_payment_failed`           | critical | the supplier reported a failed payment                             |
 | `backup_stale`                      | critical | no heartbeat, or the latest verified backup is older than 26 h     |
 | `backup_freshness_unavailable`      | critical | the heartbeat table could not be read (at most every six hours)    |
 
