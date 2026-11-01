@@ -4,6 +4,7 @@ import type { SqlDatabase } from "../lib/storage/types";
 import { createServer, getCredentials, getServer } from "../lib/rdpmonster";
 import { encryptSecret } from "../lib/crypto";
 import { runProvisionFlow, type ProvisionEnv } from "../lib/provision-flow";
+import { setAlertBackgroundScheduler } from "../lib/alerts";
 
 interface ProvisionWorkflowEnv extends ProvisionEnv {
   DB: SqlDatabase;
@@ -17,6 +18,10 @@ interface ProvisionParams {
 // before the billable POST /servers. The class is exported from custom-worker.ts.
 export class ProvisionWorkflow extends WorkflowEntrypoint<ProvisionWorkflowEnv, ProvisionParams> {
   async run(event: WorkflowEvent<ProvisionParams>, step: WorkflowStep) {
+    const ctx = this.ctx as { waitUntil?(promise: Promise<unknown>): void } | undefined;
+    if (ctx?.waitUntil) {
+      setAlertBackgroundScheduler((task) => ctx.waitUntil?.(task));
+    }
     return runProvisionFlow(this.env, event.payload.orderId, {
       repo: new OrderRepository(this.env.DB),
       create: createServer,

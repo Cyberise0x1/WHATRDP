@@ -26,5 +26,9 @@ declare global {
     TURNSTILE_SITE_KEY?: string;
     // A runtime string, never a literal, so the 503 gate cannot be constant-folded.
     PROVISIONING_ENABLED?: string;
+    // Used by the backup freshness check to pick staging or production.
+    DEPLOYMENT_TARGET?: string;
+    // Optional generic alert webhook; absent means structured logs only.
+    ALERT_WEBHOOK_URL?: string;
   }
 }

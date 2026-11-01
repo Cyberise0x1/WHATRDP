@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadShopCatalog } from "@/lib/catalog";
+import { ApiError } from "@/lib/rdpmonster";
+import { raiseAlert } from "@/lib/alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +25,15 @@ export async function GET() {
       meta: { discountPercent },
     });
   } catch (error) {
+    // Supplier status and auth failures are already alerted by the API client;
+    // this covers malformed or unexpected catalogue failures.
+    if (!(error instanceof ApiError)) {
+      raiseAlert({
+        code: "catalog_unavailable",
+        severity: "warning",
+        message: "The catalogue could not be assembled",
+      });
+    }
     return NextResponse.json(
       {
         error: "catalog_unavailable",

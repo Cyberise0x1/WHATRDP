@@ -15,17 +15,22 @@ Responses and pages are `private, no-store` with `no-referrer` and
 `X-Robots-Tag: noindex`, and order tokens must never be logged or shared.
 A per-IP checkout rate limit is deployed, and optional Turnstile
 verification is implemented but only active once both keys are configured
-(D-023). Staff access controls and alerting remain open before public
-sales.
+(D-023). Operational alerting is implemented (D-028/D-029); staff access
+controls remain open before public sales.
 
 ## Secrets and stored data
 
-- Runtime bindings: `RDP_MONSTER_API_TOKEN`, `APP_SECRET`, `RDPM_WEBHOOK_SECRET`.
+- Runtime bindings: `RDP_MONSTER_API_TOKEN`, `APP_SECRET`, `RDPM_WEBHOOK_SECRET`,
+  `ZENO_WEBHOOK_SECRET`, and the optional `ALERT_WEBHOOK_URL`.
 - Map the existing supplier API key to the expected binding through approved
   secret configuration. The supplier login email/password are not required.
 - Never expose these values in source, `NEXT_PUBLIC_*`, workflow YAML, artifacts,
   screenshots, emails or logs.
 - Preserve `APP_SECRET` for existing encrypted records. Never rotate it casually.
+- `ALERT_WEBHOOK_URL` is itself a capability: anyone holding it can post to the
+  alert channel. Keep it in the Worker secret store, and keep alert payloads free
+  of customer data, order tokens and credentials (the alert module enforces the
+  last part).
 - Order links, exports, databases and credential ciphertext are customer data.
   Exports remain under ignored `generated-artifacts/` with exclusive mode-0600
   files; they must never be committed or publicly hosted.

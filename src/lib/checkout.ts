@@ -1,9 +1,10 @@
 import { loadShopCatalog, priceForCycle } from "./catalog";
 import { isCycle, type Cycle } from "./pricing";
 import { createOrder, updateOrder } from "./store";
-import { getAccount } from "./rdpmonster";
+import { getAccount, ApiError } from "./rdpmonster";
 import { createCheckout } from "./zenobank";
 import { verifyTurnstile } from "./turnstile";
+import { raiseAlert } from "./alerts";
 
 export type CheckoutCurrency = "USD";
 
@@ -135,7 +136,14 @@ export async function createOrderCheckout(
   let shop;
   try {
     shop = await loadShopCatalog();
-  } catch {
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      raiseAlert({
+        code: "catalog_unavailable",
+        severity: "warning",
+        message: "The catalogue could not be assembled for checkout",
+      });
+    }
     throw new CheckoutError("The catalogue is unavailable", 502, "catalog_unavailable");
   }
 
@@ -157,7 +165,16 @@ export async function createOrderCheckout(
   let account;
   try {
     account = await getAccount();
-  } catch {
+  } catch (error) {
+    // Supplier status/auth failures are already alerted by the API client; this
+    // catches a malformed account payload.
+    if (!(error instanceof ApiError)) {
+      raiseAlert({
+        code: "supplier_balance_unavailable",
+        severity: "critical",
+        message: "The supplier balance could not be verified",
+      });
+    }
     throw new CheckoutError(
       "Sales are paused while supplier capacity is verified. No payment was taken.",
       503,
@@ -167,10 +184,13 @@ export async function createOrderCheckout(
 
   const requiredCents = supplierCost + renewalReserveCents();
   if (account.balanceCents < requiredCents) {
-    // Structured, credential-free alert input: wire this to monitoring (P2-1).
-    console.warn("checkout_blocked_supplier_balance", {
-      requiredCents,
-      availableCents: account.balanceCents,
+    // Structured, credential-free alert: sales are paused until the supplier is
+    // funded again. Do not include customer data.
+    raiseAlert({
+      code: "checkout_blocked_supplier_balance",
+      severity: "critical",
+      message: "Checkout is blocked because the supplier balance is below the required reserve",
+      context: { requiredCents, availableCents: account.balanceCents },
     });
     throw new CheckoutError(
       "Sales are temporarily paused while supplier capacity is replenished. No payment was taken.",

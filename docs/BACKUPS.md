@@ -27,6 +27,13 @@ The lifecycle rule `d1-retention-35d` expires both after **35 days**. Time
 Travel remains available for point-in-time recovery, but it is not a backup and
 is not a restore test.
 
+After both uploads succeed, the run inserts one row into `backup_heartbeat` with
+the environment, export time, SQL key, checksum and byte size. The five-minute
+Worker cron reads the latest row and raises `backup_stale` when it is missing or
+older than 26 hours. A failed heartbeat insert is logged but does not discard a
+good backup; the freshness check then alerts because the heartbeat stops moving.
+See [Operational monitoring](MONITORING.md).
+
 ## Integrity rules
 
 - The export is verified **before** any upload: file is non-empty, SHA-256 is
@@ -47,9 +54,13 @@ is not a restore test.
   while it runs. It is scheduled off-peak with a 60-minute job timeout;
   re-evaluate if export duration grows.
 - GitHub pauses scheduled workflows after 60 days of repository inactivity.
-  Backup freshness monitoring is part of the P2 monitoring work.
+  The Worker's 26-hour freshness check still runs independently of GitHub and
+  alerts when the heartbeat stops moving.
 - Retention is 35 daily copies. Longer retention (for example monthly archives)
   would be a separate reviewed change.
+- `migrations/0005_backup_heartbeat.sql` is applied to both databases
+  (2026-11-01). The heartbeat insert is the only write the backup job makes; the
+  token already has D1 read/write.
 
 ## One-time setup (approval required)
 

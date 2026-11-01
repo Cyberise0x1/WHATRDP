@@ -295,3 +295,33 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** keep the buckets private and `BACKUP_CLOUDFLARE_API_TOKEN`
   dedicated; never attach a dump to a GitHub artifact; the workflow cannot run
   until R2 is enabled on the account and the two buckets/secrets exist.
+
+- **D-028 · 2026-11-01 · CommandCode** — Operational monitoring is built in:
+  every alert is a structured `operational_alert` log line, and the optional
+  Worker secret `ALERT_WEBHOOK_URL` delivers the same payload to Slack, Discord,
+  Telegram (`chat_id` query) or any JSON endpoint. Delivery is best-effort via
+  `ctx.waitUntil` with a three-second timeout and a per-code cooldown; it never
+  blocks or fails a request, and sensitive keys, emails and secret prefixes are
+  scrubbed. Coverage: supplier `401/403`, `402`, `5xx`, unreachable; catalogue,
+  checkout and gateway failures; provisioning `FAILED`/`REVIEW_REQUIRED` and
+  dispatch/reconcile failures; webhook secret, payload, unmatched/mismatched
+  payment and processing failures; stale backups.
+  **Why:** the failure modes that cost money or silently stop fulfilment must be
+  visible without adding a vendor. Invalid signatures are not alerted because
+  anyone can POST them; they are rejected with `401`.
+  **How to apply:** set `ALERT_WEBHOOK_URL` per environment as a Worker secret;
+  without it alerts stay in Workers Logs. Never put customer data, order tokens
+  or credentials in alert context.
+
+- **D-029 · 2026-11-01 · CommandCode** — Backup freshness uses a D1 heartbeat
+  instead of giving the Worker R2 access: the backup workflow inserts into
+  `backup_heartbeat` only after the dump and manifest uploads succeed, and the
+  five-minute Worker cron raises `backup_stale` when the latest row is missing or
+  older than 26 hours. A failed heartbeat insert is logged but does not fail the
+  backup: a monitoring failure must not stop the thing it monitors, and the
+  Worker alerts because the heartbeat stops moving.
+  **Why:** the request-serving Worker must not gain read/write access to dumps
+  that contain order tokens and customer data, and listing R2 needs credentials
+  it does not have. **How to apply:** apply
+  `migrations/0005_backup_heartbeat.sql` before the next scheduled backup; never
+  write the heartbeat before both uploads.

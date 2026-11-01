@@ -4,11 +4,13 @@
 
 **Live resources (updated 2026-10-30).** Both environments are released.
 Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
-`whatrdp-production` (migrations 0001–0004 verified remotely); the public
+`whatrdp-production` (migrations 0001–0005 verified remotely; `0005` applied
+2026-11-01); the public
 `*.workers.dev` route is disabled and the custom domain holds the TLS
 certificate. Staging serves
 `https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
-`APP_SECRET` and `RDP_MONSTER_API_TOKEN` are set on both through the dashboard.
+`APP_SECRET` and `RDP_MONSTER_API_TOKEN` are set on both through the dashboard;
+`ALERT_WEBHOOK_URL` is also set on both (Telegram, 2026-11-01).
 The storefront renders and `/api/catalog` returns 200. Staging runs with
 checkout enabled (D-018) and the `ZENO_API_KEY` secret, pending one verified
 payment; the released production build still answers 503
@@ -157,11 +159,26 @@ adding a Zeno checkout. It requires the plan's supplier cost plus
 `SUPPLIER_RESERVE_CENTS` (a Worker variable; set it to roughly one month of
 renewals). A low balance returns 503 `insufficient_supplier_balance`; an
 unreadable account fails closed with `supplier_balance_unavailable`. Both block
-before any order or payment exists. The blocked path logs
-`checkout_blocked_supplier_balance` with required/available cents and no customer
-data — route that log to the monitoring/alerting work (P2-1). A supplier `402`
-during provisioning still marks that order `FAILED`; the next checkout's live
-balance check is what pauses further sales.
+before any order or payment exists. The blocked path emits an
+`operational_alert` (`checkout_blocked_supplier_balance`) with required/available
+cents and no customer data. A supplier `402` during provisioning still marks that
+order `FAILED`; the next checkout's live balance check is what pauses further
+sales.
+
+### Operational alerts
+
+Alerting is built in, with no vendor. Every event is always a structured
+`operational_alert` line in Workers Logs. Set the optional Worker secret
+`ALERT_WEBHOOK_URL` to also deliver alerts to Slack, Discord, Telegram (add
+`?chat_id=…`) or any JSON endpoint. Delivery is best-effort through
+`ctx.waitUntil` with a three-second timeout and a per-code cooldown, so it never
+blocks or fails a request. Covered events include supplier `401/403`, `402`,
+`5xx`, provisioning `FAILED`/`REVIEW_REQUIRED`, webhook failures (including a
+verified payment that matches no order), and a stale D1 backup. See
+[Operational monitoring](MONITORING.md).
+
+The backup freshness check reads `backup_heartbeat`; apply migration `0005`
+before the next scheduled backup.
 
 ### Abuse protection
 

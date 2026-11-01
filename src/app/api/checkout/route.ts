@@ -4,6 +4,7 @@ import { CHECKOUT_UNAVAILABLE_MESSAGE } from "@/lib/checkout-config";
 import { checkoutEnabled } from "@/lib/checkout-policy";
 import { CheckoutError, createOrderCheckout } from "@/lib/checkout";
 import { allowCheckout, type RateLimiterBinding } from "@/lib/abuse";
+import { raiseAlert } from "@/lib/alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +34,16 @@ function remoteIp(request: Request): string | null {
 
 // Fails closed before catalogue access, persistence or any supplier request.
 export async function POST(request: Request) {
-  if (!checkoutEnabled() || !process.env.ZENO_API_KEY?.trim()) return unavailable();
+  if (!checkoutEnabled()) return unavailable();
+
+  if (!process.env.ZENO_API_KEY?.trim()) {
+    raiseAlert({
+      code: "gateway_not_configured",
+      severity: "critical",
+      message: "Checkout is enabled but ZENO_API_KEY is not configured",
+    });
+    return unavailable();
+  }
 
   if (!(await allowCheckout(request, await rateLimiter()))) {
     return NextResponse.json(
@@ -65,6 +75,11 @@ export async function POST(request: Request) {
         { status: error.status, headers: NO_STORE },
       );
     }
+    raiseAlert({
+      code: "checkout_failed",
+      severity: "critical",
+      message: "Checkout failed unexpectedly",
+    });
     return NextResponse.json(
       { error: "checkout_failed", message: "Checkout could not be started. No payment was taken." },
       { status: 502, headers: NO_STORE },

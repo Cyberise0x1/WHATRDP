@@ -4,6 +4,7 @@ import type { Order } from "./storage/types";
 import type { Server, SupplierAuth } from "./rdpmonster";
 import { classifyCreateFailure } from "./provisioning";
 import { mapServerStatus } from "./order-status";
+import { raiseAlert } from "./alerts";
 
 // Both the Cloudflare Workflow and the unit tests drive this sequence. The
 // Workflow supplies the real step implementation; tests supply an immediate one.
@@ -78,6 +79,12 @@ export async function runProvisionFlow(
   );
 
   if (!created.ok) {
+    raiseAlert({
+      code: created.certainRejection ? "provisioning_failed" : "provisioning_review_required",
+      severity: "critical",
+      message: created.message,
+      context: { orderId: claimed.id, certainRejection: created.certainRejection },
+    });
     await step.do("record creation failure", { retries: { limit: 0 } }, () =>
       repo.update(claimed.id, {
         status: created.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
@@ -129,5 +136,13 @@ export async function runProvisionFlow(
 
   // A paid order whose server is still provisioning is left for the
   // reconciliation job; it is never marked failed here.
+  if (current.status === "FAILED") {
+    raiseAlert({
+      code: "provisioning_failed",
+      severity: "critical",
+      message: "The supplier reported a terminal failure while provisioning",
+      context: { orderId: current.id, status: current.status },
+    });
+  }
   return current.status === "ACTIVE" ? "active" : "provisioning";
 }

@@ -2,6 +2,8 @@
 // Contract: https://docs.zenobank.io/api-reference/checkouts/create-a-new-checkout
 // and https://docs.zenobank.io/api-reference/webhooks
 
+import { raiseAlert } from "./alerts";
+
 export type ZenoCurrency = "USD";
 
 export interface ZenoCheckoutRequest {
@@ -47,18 +49,44 @@ function baseUrl(): string {
 
 function apiKey(): string {
   const key = process.env.ZENO_API_KEY?.trim();
-  if (!key) throw new Error("ZENO_API_KEY is not configured");
+  if (!key) {
+    raiseAlert({
+      code: "gateway_not_configured",
+      severity: "critical",
+      message: "ZENO_API_KEY is not configured",
+    });
+    throw new Error("ZENO_API_KEY is not configured");
+  }
   return key;
 }
 
 export async function createCheckout(input: ZenoCheckoutRequest): Promise<ZenoCheckout> {
-  const response = await fetch(`${baseUrl()}/api/v1/checkouts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-Key": apiKey() },
-    body: JSON.stringify(input),
-    signal: AbortSignal.timeout(10_000),
-  });
+  const key = apiKey();
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl()}/api/v1/checkouts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": key },
+      body: JSON.stringify(input),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    raiseAlert({
+      code: "gateway_unreachable",
+      severity: "critical",
+      message: "The payment gateway could not be reached",
+    });
+    throw error;
+  }
   if (!response.ok) {
+    // Never forward the gateway response body: it is not needed to operate and
+    // may echo request data.
+    raiseAlert({
+      code: "gateway_checkout_failed",
+      severity: "critical",
+      message: "The payment gateway rejected checkout creation",
+      context: { status: response.status },
+    });
     throw new Error(`Zeno checkout failed with status ${response.status}`);
   }
   return (await response.json()) as ZenoCheckout;

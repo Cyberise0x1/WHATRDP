@@ -4,6 +4,7 @@ import type { Server } from "./rdpmonster";
 import { getCredentials, getServer } from "./rdpmonster";
 import { encryptSecret } from "./crypto";
 import { mapServerStatus } from "./order-status";
+import { raiseAlert } from "./alerts";
 
 export interface WorkflowCreator {
   create(options: { id?: string; params?: unknown }): Promise<unknown>;
@@ -81,12 +82,27 @@ export async function reconcileOrders(
         });
         result.dispatched += 1;
       } catch (error) {
-        if (/already exists|duplicate/i.test(String(error))) result.dispatched += 1;
+        if (/already exists|duplicate/i.test(String(error))) {
+          result.dispatched += 1;
+        } else {
+          raiseAlert({
+            code: "provision_dispatch_failed",
+            severity: "critical",
+            message: "The provisioning Workflow could not be dispatched for a paid order",
+            context: { orderId: order.id },
+          });
+        }
       }
       continue;
     }
 
     if (!order.service_id) {
+      raiseAlert({
+        code: "provisioning_review_required",
+        severity: "critical",
+        message: "Provisioning was interrupted before a service was linked",
+        context: { orderId: order.id },
+      });
       await repo.update(order.id, {
         status: "REVIEW_REQUIRED",
         error:
@@ -100,10 +116,19 @@ export async function reconcileOrders(
       const server = await fetchServer(order.service_id, auth);
       const ip =
         server.ips?.find((entry) => entry.primary)?.address ?? server.ips?.[0]?.address ?? null;
+      const status = mapServerStatus(server.status);
       let current = await repo.update(order.id, {
-        status: mapServerStatus(server.status),
+        status,
         primary_ip: ip,
       });
+      if (status === "FAILED") {
+        raiseAlert({
+          code: "provisioning_failed",
+          severity: "critical",
+          message: "The supplier reported a failed server during reconciliation",
+          context: { orderId: order.id, supplierStatus: server.status },
+        });
+      }
       if (server.status === "ACTIVE" && !current.password_enc) {
         const credentials = await fetchCredentials(order.service_id, auth);
         current = await repo.update(order.id, {
@@ -114,7 +139,16 @@ export async function reconcileOrders(
       }
       result.synced += 1;
     } catch {
-      // Read retries already ran inside the client; leave it for the next run.
+      // Read retries already ran inside the client; leave it for the next run,
+      // but make a persistent failure visible without alerting every five
+      // minutes.
+      raiseAlert({
+        code: "reconcile_sync_failed",
+        severity: "warning",
+        message: "A provisioning order could not be re-synced",
+        context: { orderId: order.id },
+        cooldownMs: 60 * 60 * 1000,
+      });
     }
   }
 

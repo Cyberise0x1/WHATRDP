@@ -84,6 +84,7 @@ published as part of this cleanup.
 - [Development and dependency updates](docs/DEVELOPMENT.md)
 - [Test plan](docs/TEST_PLAN.md)
 - [Security boundaries](docs/SECURITY.md)
+- [Operational monitoring and alerts](docs/MONITORING.md)
 - [Deployment, migrations and rollback](docs/DEPLOYMENT.md)
 - [Cleanup inventory](docs/REPOSITORY-CLEANUP.md)
 - [Historical decisions](.agents/memory/decisions.md)

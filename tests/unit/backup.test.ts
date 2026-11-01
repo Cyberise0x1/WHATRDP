@@ -14,6 +14,7 @@ import {
   backupKeys,
   buildManifest,
   compareCounts,
+  heartbeatSql,
   inspectBackupFile,
   orchestrateBackup,
   parseCounts,
@@ -56,6 +57,31 @@ test("backup keys are deterministic, UTC and under the retention prefix", () => 
   assert.equal(BACKUP_PREFIX, "d1/");
   assert.equal(RETENTION_DAYS, 35);
   assert.match(COUNTS_SQL, /webhook_events/);
+});
+
+test("the heartbeat records a verified upload without interpolating raw input", () => {
+  const sql = heartbeatSql({
+    environment: "production",
+    exportedAt: AT,
+    sqlKey: "d1/production/20261031T031700Z.sql",
+    sha256: "a".repeat(64),
+    bytes: 1234,
+  });
+  assert.match(sql, /^INSERT INTO backup_heartbeat/);
+  assert.match(sql, /'production'/);
+  assert.match(sql, /'2026-10-31T03:17:00\.000Z'/);
+  assert.match(sql, /'d1\/production\/20261031T031700Z\.sql'/);
+  assert.match(sql, /'a{64}'/);
+  assert.match(sql, /1234/);
+
+  const escaped = heartbeatSql({
+    environment: "staging",
+    exportedAt: AT,
+    sqlKey: "d1/o'brien.sql",
+    sha256: "b".repeat(64),
+    bytes: 1,
+  });
+  assert.match(escaped, /'d1\/o''brien\.sql'/);
 });
 
 test("row counts require every expected table and non-negative integers", () => {
@@ -144,7 +170,7 @@ test("a backup uploads only after a valid export, in the expected order", async 
       { run, workDir: dir, now: AT },
     );
 
-    assert.equal(calls.length, 4);
+    assert.equal(calls.length, 5);
     assert.deepEqual(calls[0], [
       "d1",
       "execute",
@@ -188,7 +214,20 @@ test("a backup uploads only after a valid export, in the expected order", async 
       "--remote",
       "--force",
     ]);
+    assert.deepEqual(calls[4].slice(0, 6), [
+      "d1",
+      "execute",
+      "orders-staging",
+      "--remote",
+      "-y",
+      "--command",
+    ]);
+    assert.match(calls[4][6], /INSERT INTO backup_heartbeat/);
+    assert.match(calls[4][6], /'staging'/);
+    assert.match(calls[4][6], /'2026-10-31T03:17:00\.000Z'/);
+    assert.match(calls[4][6], /'d1\/staging\/20261031T031700Z\.sql'/);
 
+    assert.equal(result.heartbeatRecorded, true);
     const manifest = parseManifest(await readFile(join(dir, "backup.manifest.json"), "utf8"));
     assert.deepEqual(manifest.rowCountsAtExportStart, COUNTS);
     assert.equal(manifest.sha256, result.manifest.sha256);
@@ -263,12 +302,49 @@ test("a failed export or failed integrity check never reaches R2", async () => {
   });
 });
 
+test("a failed heartbeat write keeps the backup and reports the lost signal", async () => {
+  await withTempDir(async (dir) => {
+    const run = (args: string[]): WranglerResult => {
+      if (args[0] === "d1" && args[1] === "execute") {
+        const command = args[args.indexOf("--command") + 1] ?? "";
+        if (command.includes("backup_heartbeat")) {
+          return { status: 1, stdout: "", stderr: "" };
+        }
+        return { status: 0, stdout: COUNTS_JSON, stderr: "" };
+      }
+      if (args[0] === "d1" && args[1] === "export") {
+        writeFileSync(args[args.indexOf("--output") + 1], SQL);
+        return { status: 0, stdout: "", stderr: "" };
+      }
+      return { status: 0, stdout: "", stderr: "" };
+    };
+
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...values: unknown[]) => {
+      warnings.push(values.map((value) => String(value)).join(" "));
+    };
+    try {
+      const result = await orchestrateBackup(
+        { environment: "staging", database: "orders-staging", bucket: "whatrdp-backups-staging" },
+        { run, workDir: dir, now: AT },
+      );
+      assert.equal(result.heartbeatRecorded, false);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], /backup_heartbeat_failed/);
+      assert.match(warnings[0], /staging/);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+});
+
 test("required application tables exist in the migrations", async () => {
   const files = (await readdir("migrations")).filter((name) => name.endsWith(".sql"));
   const sql = (
     await Promise.all(files.map((name) => readFile(join("migrations", name), "utf8")))
   ).join("\n");
-  for (const table of ["orders", "webhook_events"]) {
+  for (const table of ["orders", "webhook_events", "backup_heartbeat"]) {
     assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`, "i"));
   }
 });

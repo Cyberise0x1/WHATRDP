@@ -1,3 +1,5 @@
+import { raiseAlert } from "./alerts";
+
 export interface CatalogPlan {
   sku: string;
   name: string;
@@ -105,6 +107,11 @@ function baseUrl(auth?: SupplierAuth): string {
 function token(auth?: SupplierAuth): string {
   const value = (auth?.token ?? process.env.RDP_MONSTER_API_TOKEN)?.trim();
   if (!value) {
+    raiseAlert({
+      code: "supplier_token_missing",
+      severity: "critical",
+      message: "RDP_MONSTER_API_TOKEN is not configured",
+    });
     throw new ApiError("RDP_MONSTER_API_TOKEN is not configured", 0, "missing_token");
   }
   return value;
@@ -123,18 +130,33 @@ export async function api<T>(
 
   while (true) {
     attempt += 1;
-    const response = await fetch(`${baseUrl(options.auth)}${path}`, {
-      ...init,
-      cache: "no-store",
-      signal: init.signal ?? AbortSignal.timeout(10_000),
-      headers: {
-        Authorization: `Bearer ${token(options.auth)}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "rdpmonster-storefront/1.0",
-        ...(init.headers ?? {}),
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${baseUrl(options.auth)}${path}`, {
+        ...init,
+        cache: "no-store",
+        signal: init.signal ?? AbortSignal.timeout(10_000),
+        headers: {
+          Authorization: `Bearer ${token(options.auth)}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "rdpmonster-storefront/1.0",
+          ...(init.headers ?? {}),
+        },
+      });
+    } catch (error) {
+      if (method === "GET" && attempt <= retries) {
+        await sleep(250 * 2 ** (attempt - 1));
+        continue;
+      }
+      raiseAlert({
+        code: "supplier_unreachable",
+        severity: "critical",
+        message: "The supplier API could not be reached",
+        context: { method, path },
+      });
+      throw error;
+    }
 
     if (response.ok) {
       return (await response.json()) as T;
@@ -159,6 +181,32 @@ export async function api<T>(
     if (method === "GET" && response.status >= 500 && attempt <= retries) {
       await sleep(250 * 2 ** (attempt - 1));
       continue;
+    }
+
+    // Retries are exhausted (or the request is a write): this is the failure an
+    // operator needs to see. Never include the response body or request data.
+    const context = { status: response.status, method, path };
+    if (response.status === 401 || response.status === 403) {
+      raiseAlert({
+        code: "supplier_auth_failed",
+        severity: "critical",
+        message: "The supplier API rejected our credentials",
+        context,
+      });
+    } else if (response.status === 402 || code === "insufficient_balance") {
+      raiseAlert({
+        code: "supplier_balance_exhausted",
+        severity: "critical",
+        message: "The supplier balance is insufficient for this request",
+        context,
+      });
+    } else if (response.status >= 500) {
+      raiseAlert({
+        code: "supplier_5xx",
+        severity: "warning",
+        message: "The supplier API returned a server error",
+        context,
+      });
     }
 
     throw new ApiError(message, response.status, code, body.ref);

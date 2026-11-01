@@ -69,6 +69,7 @@ async function run(): Promise<void> {
     console.log(`Manifest uploaded: ${bucket}/${result.keys.manifest}`);
     console.log(`Bytes: ${result.manifest.bytes}; sha256: ${result.manifest.sha256}`);
     console.log(`Row counts at export start: ${JSON.stringify(result.rowCounts)}`);
+    console.log(`Freshness heartbeat: ${result.heartbeatRecorded ? "recorded" : "NOT recorded"}`);
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }

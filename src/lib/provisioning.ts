@@ -1,5 +1,6 @@
 import type { OrderRepository } from "./storage/repository";
 import type { Server } from "./rdpmonster";
+import { raiseAlert } from "./alerts";
 
 export interface CreateFailure {
   certainRejection: boolean;
@@ -44,6 +45,12 @@ export async function runProvisioning(
     return await store.update(id, { service_id: response.data.id, error: null });
   } catch (error) {
     const failure = classifyCreateFailure(error);
+    raiseAlert({
+      code: failure.certainRejection ? "provisioning_failed" : "provisioning_review_required",
+      severity: "critical",
+      message: failure.message,
+      context: { orderId: id, certainRejection: failure.certainRejection },
+    });
     return store.update(id, {
       status: failure.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
       error: failure.message,

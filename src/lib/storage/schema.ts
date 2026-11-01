@@ -31,4 +31,15 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   type TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS backup_heartbeat (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  environment TEXT NOT NULL,
+  exported_at TEXT NOT NULL,
+  sql_key TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  recorded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_backup_heartbeat_environment
+  ON backup_heartbeat(environment, exported_at DESC);
 `;

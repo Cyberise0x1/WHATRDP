@@ -60,6 +60,27 @@ export function backupKeys(environment: BackupEnvironment, at: Date): BackupKeys
   return { sql: `${base}.sql`, manifest: `${base}.manifest.json` };
 }
 
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/**
+ * Heartbeat written after a verified upload. The Worker cron reads this row to
+ * detect a stale or missing backup without needing R2 access itself.
+ */
+export function heartbeatSql(input: {
+  environment: BackupEnvironment;
+  exportedAt: Date;
+  sqlKey: string;
+  sha256: string;
+  bytes: number;
+}): string {
+  return [
+    "INSERT INTO backup_heartbeat (environment, exported_at, sql_key, sha256, bytes)",
+    `VALUES (${sqlString(input.environment)}, ${sqlString(input.exportedAt.toISOString())}, ${sqlString(input.sqlKey)}, ${sqlString(input.sha256)}, ${input.bytes})`,
+  ].join(" ");
+}
+
 export function parseCounts(stdout: string): RowCounts {
   let parsed: unknown;
   try {
@@ -294,6 +315,8 @@ export interface BackupResult {
   keys: BackupKeys;
   manifest: BackupManifest;
   rowCounts: RowCounts;
+  /** False means the dump is safe but freshness monitoring lost its signal. */
+  heartbeatRecorded: boolean;
 }
 
 /**
@@ -382,5 +405,35 @@ export async function orchestrateBackup(
   ]);
   if (manifestUpload.status !== 0) throw new Error("Uploading the backup manifest failed");
 
-  return { keys, manifest, rowCounts };
+  // Record the verified upload only after both objects exist. The scheduled
+  // Worker reads this row. A heartbeat failure must not fail the backup itself:
+  // the dump is already safe, and the Worker will raise `backup_stale` (or
+  // `backup_freshness_unavailable`) because the heartbeat stops moving.
+  const heartbeat = deps.run([
+    "d1",
+    "execute",
+    database,
+    "--remote",
+    "-y",
+    "--command",
+    heartbeatSql({
+      environment,
+      exportedAt: now,
+      sqlKey: keys.sql,
+      sha256: inspection.sha256,
+      bytes: inspection.bytes,
+    }),
+  ]);
+  const heartbeatRecorded = heartbeat.status === 0;
+  if (!heartbeatRecorded) {
+    console.warn(
+      JSON.stringify({
+        event: "backup_heartbeat_failed",
+        environment,
+        message: "The backup uploaded but the freshness heartbeat was not recorded",
+      }),
+    );
+  }
+
+  return { keys, manifest, rowCounts, heartbeatRecorded };
 }
