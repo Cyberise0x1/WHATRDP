@@ -8,7 +8,7 @@ type Variables = Record<string, string | undefined>;
 //   production — one staging order verified end to end and the D-024 guard removed
 // Changing an entry is a reviewed code change, never configuration (D-019/D-026).
 export const FULFILMENT_ENABLED: Record<Environment, boolean> = {
-  staging: false,
+  staging: true,
   production: false,
 };
 

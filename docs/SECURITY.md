@@ -4,7 +4,8 @@
 
 Checkout is implemented and enabled on staging (D-018); production forces it
 closed by server-side policy until fulfilment is verified (D-024), so
-public requests answer 503. Fulfilment is inert behind `PROVISIONING_ENABLED`
+public requests answer 503. Fulfilment is enabled on staging and inert in
+production behind `PROVISIONING_ENABLED`
 (D-019), and a five-minute reconciliation run handles stuck orders (D-020).
 
 Order URLs are **bearer credentials**: anyone with a valid link can view that

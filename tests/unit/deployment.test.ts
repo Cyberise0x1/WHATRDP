@@ -55,7 +55,7 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
     vars: { PROVISIONING_ENABLED: "true" },
   });
   assert.match(config.main, /custom-worker\.ts$/);
-  assert.equal(config.vars.PROVISIONING_ENABLED, "false");
+  assert.equal(config.vars.PROVISIONING_ENABLED, provisioningEnabled("staging"));
   assert.equal(config.d1_databases[0].database_id, ids.staging);
   assert.equal(config.name, approved.STAGING_WORKER_NAME);
   assert.deepEqual(config.workflows, [
@@ -76,7 +76,7 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
 });
 
 test("fulfilment is per environment and off until reviewed", () => {
-  assert.deepEqual(FULFILMENT_ENABLED, { staging: false, production: false });
+  assert.deepEqual(FULFILMENT_ENABLED, { staging: true, production: false });
 
   const stagingOnly = { staging: true, production: false };
   assert.equal(provisioningEnabled("staging", stagingOnly), "true");

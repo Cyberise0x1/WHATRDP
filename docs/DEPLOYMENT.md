@@ -145,17 +145,22 @@ preparation always points `main` at it — never at the generated
 exports `fetch`. The configuration also declares a per-environment Workflow
 (`<worker-name>-provision`, class `ProvisionWorkflow`, binding
 `PROVISION_WORKFLOW`). Fulfilment is a per-environment switch,
-`FULFILMENT_ENABLED` in `scripts/lib/deployment.ts`; both environments are
-`false` today, so a settled order stays `PAID` and no Workflow is dispatched.
+`FULFILMENT_ENABLED` in `scripts/lib/deployment.ts`; staging is `true` and
+production is `false`, so on production a settled order stays `PAID` and no
+Workflow is dispatched.
 The generated deploy configuration always wins over an environment variable or
 the checked-in `wrangler.jsonc`; enabling it by configuration is impossible.
 
-Activation order:
+Activation order (steps 1–3 done 2026-11-02):
 
 1. Staging only after the supplier balance is funded, reseller products exist
-   and `SUPPLIER_RESERVE_CENTS` is set.
+   and `SUPPLIER_RESERVE_CENTS` is set. Balance is $300 (Gold, 25%); reseller
+   products remain optional because public SKUs order at the tier discount; the
+   reserve stays 0 while there are no renewals to fund.
 2. Before merging the flip, review or park any stale `PAID`/`PROVISIONING`
    orders in staging: the five-minute reconcile dispatches them once enabled.
+   Staging held only `PENDING_PAYMENT` orders, so nothing was dispatched
+   retroactively.
 3. Set `staging: true`, update the current-state assertion in
    `tests/unit/deployment.test.ts`, and merge the reviewed change. Staging
    deploys automatically after green CI.

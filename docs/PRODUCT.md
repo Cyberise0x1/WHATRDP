@@ -16,9 +16,11 @@ servers; our business handles pricing, payments, support and customer records.
   handling for ambiguous billable requests.
 - **Checkout is implemented and enabled on staging only** (D-018). Production
   forces checkout closed by server-side policy (D-024), so a public release
-  answers 503 until fulfilment is enabled and verified. Fulfilment stays
-  disabled: a paid order is recorded but no server is created. Durable Workflow fulfilment is implemented
-  but inert behind `PROVISIONING_ENABLED=false` (D-019). A five-minute bounded
+  answers 503 until fulfilment is enabled and verified. Fulfilment is enabled on
+  staging only: a paid staging order provisions a server, while production stays
+  disabled. Durable Workflow fulfilment is implemented
+  but inert behind `PROVISIONING_ENABLED=false` in production (D-019). A
+  five-minute bounded
   reconciliation run re-syncs stuck orders and re-dispatches unpaid fulfilment
   only while that switch is on (D-020). Checkout checks the live
   supplier balance (plus a configurable renewal reserve) before creating an
