@@ -420,3 +420,17 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   supplier failure as deletion. The staging test server for order 4 is set to
   cancel at period end (`autoRenew=false`, expires 2026-12-02), not destroyed
   immediately.
+
+- **D-035 · 2026-11-02 · CommandCode** — The cancellation handling fix was
+  released to production at `8b35299` through the gated **Deploy production**
+  workflow (run 41522474918, checks and deploy green after reviewer approval) as
+  Worker version `1d6d2b4e-d46d-4b5f-a7de-26e7a793ab62`. Production remains
+  `DEPLOYMENT_TARGET=cloudflare-production` with `PROVISIONING_ENABLED=true`;
+  live checks pass and production `orders` is still empty. The previous Worker
+  version is `2b821f4f-0532-4677-bac0-d979699ae8e7` for rollback.
+  **Why:** the staging test server was set to cancel at period end, and leaving
+  an ACTIVE order with stale credentials is a launch gap.
+  **Consequence:** a supplier `404` now cancels the order and clears credentials;
+  the first real production order still needs end-to-end monitoring.
+  **How to apply:** keep the 404 rule for deletion and never cancel on a
+  transient failure.
