@@ -6,9 +6,10 @@ for production storage. The actual servers remain with RDP.monster.
 
 **Controlled pilot.** Catalogue browsing, Zeno checkout and durable fulfilment
 are implemented and enabled in both environments after one staging order was
-verified end to end (D-032). Production changes only through the gated
-`Deploy production` workflow. Customer accounts, legal pages, refunds and
-dispute handling remain out of scope for the pilot.
+verified end to end (D-032); production was released on 2026-11-02 (D-033).
+Production changes only through the gated `Deploy production` workflow.
+Customer accounts, legal pages, refunds and dispute handling remain out of scope
+for the pilot.
 
 ## Local development
 

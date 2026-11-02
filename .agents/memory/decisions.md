@@ -386,3 +386,22 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** release only through the production workflow, record the
   previous Worker version (`0dbeb585`) for rollback, and keep the supplier
   balance funded; never add an environment override for checkout or fulfilment.
+
+- **D-033 · 2026-11-02 · user (approved release), CommandCode (delivery)** —
+  Production was released at `0046808` through the gated **Deploy production**
+  workflow (run 41512943722, checks and deploy green after reviewer approval) as
+  Worker version `2b821f4f-0532-4677-bac0-d979699ae8e7`. Live verification: root
+  and `/api/catalog` return 200, an unknown order returns 404, and
+  `POST /api/checkout` with an empty body returns 400 `invalid_sku` (checkout
+  open and gateway configured) without creating an order. Production Worker
+  bindings confirm `DEPLOYMENT_TARGET=cloudflare-production` and
+  `PROVISIONING_ENABLED=true`; production `orders` remains empty. The previous
+  Worker version is `0dbeb585-6e9e-4c67-b0cc-e305bb69b1da` for rollback.
+  **Why:** the owner approved the release after the reviewed D-032 change and
+  the required-reviewer gate.
+  **Consequence:** production accepts real Zeno payments, and a settled order
+  dispatches the provisioning Workflow and the five-minute reconcile cron. No
+  production order has been placed yet.
+  **How to apply:** monitor the first real order end to end; a Worker rollback
+  does not reverse D1 writes or supplier orders, so reconcile those explicitly.
+  Keep release authority in the workflow.

@@ -15,13 +15,13 @@ both through the dashboard (Telegram, 2026-11-01). Credential email uses the
 Cloudflare Email Service `send_email` binding (`EMAIL`); the domain is onboarded
 and `EMAIL_FROM` is set. The storefront renders and `/api/catalog` returns 200.
 Staging ran one real order (order 4, $15.99 USDC) to `ACTIVE` and delivered its
-credential email on 2026-11-02. The reviewed production enablement (D-032) turns
-checkout and fulfilment on; the currently released production build stays closed
-until the gated **Deploy production** workflow runs.
+credential email on 2026-11-02. Production was released through **Deploy
+production** at `0046808` (Worker version `2b821f4f`, 2026-11-02) with checkout
+and fulfilment enabled (D-032, D-033).
 
-Production was last released through `Deploy production` at `8fb6d7c` (Worker
-version `dc640df8`, 2026-11-01) with credential-email support. The earlier
-`c6e4784` release established the environment gate (required reviewer,
+Production was previously released through `Deploy production` at `8fb6d7c`
+(Worker version `dc640df8`, 2026-11-01) with credential-email support. The
+earlier `c6e4784` release established the environment gate (required reviewer,
 `PRODUCTION_POLICY_READ_TOKEN`, typed `DEPLOY`). `www.whatrdp.com` has **no** DNS
 record and does not resolve — only the apex is attached. The checked-in D1 ID is
 local-only; real IDs live in repository variables.
@@ -168,8 +168,8 @@ Activation order (steps 1–5 done 2026-11-02):
    credentials; the credential email was received at 12:45 UTC (13:45 local).
 5. `production: true` and the D-024 guard were removed in the same reviewed
    change (D-032). Production `orders` was empty, so enabling its reconcile cron
-   cannot dispatch a pre-existing order. The Worker arms on the next gated
-   release.
+   cannot dispatch a pre-existing order. Released 2026-11-02 through **Deploy
+   production** (run 41512943722, Worker version `2b821f4f`).
 
 A scheduled handler (`*/5 * * * *` in the generated configuration) reconciles
 at most 25 orders per run: it re-dispatches the Workflow for old `PAID` orders

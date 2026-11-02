@@ -4,9 +4,8 @@
 
 Checkout and fulfilment are enabled in both environments (D-018, D-019, D-032)
 after one staging order was verified end to end. The server-side guard that
-forced production closed (D-024) has been removed; production opens with the
-next gated release. A five-minute reconciliation run handles stuck orders
-(D-020).
+forced production closed (D-024) has been removed; production was released on
+2026-11-02. A five-minute reconciliation run handles stuck orders (D-020).
 
 Order URLs are **bearer credentials**: anyone with a valid link can view that
 order and, once `ACTIVE`, its revealed server credentials. The owner accepted
