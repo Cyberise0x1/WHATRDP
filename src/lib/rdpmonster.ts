@@ -279,22 +279,43 @@ export async function createServer(
   try {
     return await api(
       "/servers",
-      { method: "POST", body: JSON.stringify(payload) },
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+        // A create can take longer than the default read budget. Raising it
+        // avoids turning a slow-but-successful order into an uncertain one.
+        signal: AbortSignal.timeout(45_000),
+      },
       { retries: 0, auth },
     );
   } catch (error) {
-    if (!(error instanceof ApiError) || error.status < 500) {
-      throw error;
-    }
+    // A definite 4xx (except a timeout) means nothing was created.
+    const certain =
+      error instanceof ApiError &&
+      error.status >= 400 &&
+      error.status < 500 &&
+      error.status !== 408;
+    if (certain) throw error;
+
+    // A network failure or 5xx can happen after the supplier has already
+    // charged us and created the server, so look it up by the deterministic
+    // label before reporting an uncertain outcome.
     const existing = await findServerByLabel(String(payload.label ?? ""), 15_000, auth);
     if (existing) {
       return { data: existing, servers: [existing], recovered: true };
     }
+    if (error instanceof ApiError) {
+      throw new ApiError(
+        "Server creation returned a server error and no matching server appeared. Check the RDP Monster panel before retrying.",
+        error.status,
+        "create_uncertain",
+        error.ref,
+      );
+    }
     throw new ApiError(
-      "Server creation returned a server error and no matching server appeared. Check the RDP Monster panel before retrying.",
-      error.status,
+      "Server creation did not confirm and no matching server appeared. Check the RDP Monster panel before retrying.",
+      0,
       "create_uncertain",
-      error.ref,
     );
   }
 }

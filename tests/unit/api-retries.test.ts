@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { api, ApiError, findServerByLabel, type Server } from "../../src/lib/rdpmonster";
+import {
+  api,
+  ApiError,
+  createServer,
+  findServerByLabel,
+  type Server,
+} from "../../src/lib/rdpmonster";
 
 process.env.RDP_MONSTER_API_TOKEN = "fixture_not_a_real_token";
 
@@ -98,6 +104,51 @@ test("label reconciliation stops at the reported total and at a short page", asy
   try {
     assert.equal(await findServerByLabel("web-target", 0), null);
     assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a timed-out create recovers the server by label instead of ordering twice", async () => {
+  const original = globalThis.fetch;
+  let posts = 0;
+  let reads = 0;
+  globalThis.fetch = async (_input, init) => {
+    if ((init?.method ?? "GET").toUpperCase() === "POST") {
+      posts += 1;
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    }
+    reads += 1;
+    return Response.json({ data: [entry("web-target")], meta: { total: 1 } });
+  };
+  try {
+    const result = await createServer({ label: "web-target", plan: "europe/1" });
+    assert.equal(posts, 1, "the billable request is never repeated");
+    assert.equal(reads, 1);
+    assert.equal(result.recovered, true);
+    assert.equal(result.data.id, "web-target");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("a definite rejection fails fast without scanning the account", async () => {
+  const original = globalThis.fetch;
+  let reads = 0;
+  globalThis.fetch = async (_input, init) => {
+    if ((init?.method ?? "GET").toUpperCase() === "POST") {
+      return Response.json({ error: "insufficient_balance" }, { status: 402 });
+    }
+    reads += 1;
+    return Response.json({ data: [] });
+  };
+  try {
+    await assert.rejects(createServer({ label: "web-target" }), (error: unknown) => {
+      assert.ok(error instanceof ApiError);
+      assert.equal(error.status, 402);
+      return true;
+    });
+    assert.equal(reads, 0);
   } finally {
     globalThis.fetch = original;
   }
