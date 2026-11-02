@@ -95,6 +95,11 @@ export interface SupplierAuth {
   baseUrl?: string;
 }
 
+/** The supplier has no such server: it was deleted or cancelled, not a transient fault. */
+export function isMissingServerError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 function baseUrl(auth?: SupplierAuth): string {
   const raw =
     auth?.baseUrl?.trim() ||

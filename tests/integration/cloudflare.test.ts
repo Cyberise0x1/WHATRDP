@@ -110,6 +110,16 @@ function options() {
               ips: [{ address: "192.0.2.10", primary: true }],
             },
           });
+        if (url.pathname.endsWith("/servers/srv_missing"))
+          return Response.json(
+            { error: "not_found", message: "Server not found" },
+            { status: 404 },
+          );
+        if (url.pathname.endsWith("/servers/srv_error"))
+          return Response.json(
+            { error: "server_error", message: "Upstream error" },
+            { status: 500 },
+          );
       }
       // No test may reach a live gateway/provider or create a paid VM.
       throw new Error(
@@ -441,6 +451,59 @@ test("provider webhook rejects tampering/replays and fetches authoritative state
   assert.equal(updated?.primary_ip, "192.0.2.10");
   assert.equal(updated?.status, "ACTIVE");
   assert.equal(decryptSecret(updated!.password_enc!), "fixture-server-password");
+});
+
+test("a deleted provider server cancels the order and removes credentials", async () => {
+  const order = await makeOrder();
+  await repo.update(order.id, {
+    status: "ACTIVE",
+    service_id: "srv_missing",
+    primary_ip: "192.0.2.99",
+    username: "Administrator",
+    password_enc: encryptSecret("fixture-password"),
+  });
+  const body = JSON.stringify({ event: "server.deleted", data: { serviceId: "srv_missing" } });
+  const response = await mf.dispatchFetch("https://fixture.test/api/webhooks/rdpmonster", {
+    method: "POST",
+    body,
+    headers: signedProvider(body),
+  });
+  assert.equal(response.status, 200);
+
+  const stored = await repo.byId(order.id);
+  assert.equal(stored?.status, "CANCELLED");
+  assert.equal(stored?.primary_ip, null);
+  assert.equal(stored?.username, null);
+  assert.equal(stored?.password_enc, null);
+
+  const page = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}`);
+  assert.equal(page.status, 200);
+  const payload = (await page.json()) as { data: { status: string; credentials: unknown } };
+  assert.equal(payload.data.status, "CANCELLED");
+  assert.equal(payload.data.credentials, null);
+});
+
+test("a transient supplier error does not cancel a live order", async () => {
+  const order = await makeOrder();
+  await repo.update(order.id, {
+    status: "ACTIVE",
+    service_id: "srv_error",
+    primary_ip: "192.0.2.99",
+    username: "Administrator",
+    password_enc: encryptSecret("fixture-password"),
+  });
+  const body = JSON.stringify({ event: "server.suspended", data: { serviceId: "srv_error" } });
+  const response = await mf.dispatchFetch("https://fixture.test/api/webhooks/rdpmonster", {
+    method: "POST",
+    body,
+    headers: signedProvider(body),
+  });
+  assert.equal(response.status, 200);
+
+  const stored = await repo.byId(order.id);
+  assert.equal(stored?.status, "ACTIVE");
+  assert.ok(stored?.password_enc);
+  assert.match(stored?.error ?? "", /status check failed/i);
 });
 
 test("provider billing events are acknowledged without touching an order", async () => {

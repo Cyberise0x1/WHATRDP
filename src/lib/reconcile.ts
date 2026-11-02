@@ -1,7 +1,7 @@
 import { OrderRepository } from "./storage/repository";
 import type { Order, SqlDatabase } from "./storage/types";
 import type { Server } from "./rdpmonster";
-import { getCredentials, getServer } from "./rdpmonster";
+import { getCredentials, getServer, isMissingServerError } from "./rdpmonster";
 import { encryptSecret } from "./crypto";
 import { mapServerStatus } from "./order-status";
 import { raiseAlert } from "./alerts";
@@ -156,7 +156,18 @@ export async function reconcileOrders(
         }
       }
       result.synced += 1;
-    } catch {
+    } catch (error) {
+      if (isMissingServerError(error)) {
+        await repo.update(order.id, {
+          status: "CANCELLED",
+          primary_ip: null,
+          username: null,
+          password_enc: null,
+          error: "The provider no longer has this server. It was cancelled or removed.",
+        });
+        result.synced += 1;
+        continue;
+      }
       // Read retries already ran inside the client; leave it for the next run,
       // but make a persistent failure visible without alerting every five
       // minutes.

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { reconcileOrders, type ReconcileEnv } from "../../src/lib/reconcile";
 import { decryptSecret, encryptSecret } from "../../src/lib/crypto";
 import { OrderRepository } from "../../src/lib/storage/repository";
-import type { Server } from "../../src/lib/rdpmonster";
+import { ApiError, type Server } from "../../src/lib/rdpmonster";
 import type { Order, OrderStatus } from "../../src/lib/storage/types";
 import { getDatabase } from "../../src/lib/database";
 
@@ -170,6 +170,31 @@ test("a supplier read failure leaves the order for the next run", async () => {
   assert.equal(result.scanned, 1);
   assert.equal(result.synced, 0);
   assert.equal((await repo.byId(stale.id))?.status, "PROVISIONING");
+});
+
+test("a missing supplier service is cancelled and clears stored credentials", async () => {
+  const stale = await makeOrder("PROVISIONING", "srv_missing");
+  await repo.update(stale.id, {
+    primary_ip: "203.0.113.10",
+    username: "Administrator",
+    password_enc: encryptSecret("s3cret", SECRET),
+  });
+  await backdate(stale.id);
+
+  const result = await reconcileOrders(env, {
+    repo,
+    getServer: async () => {
+      throw new ApiError("Server not found", 404, "not_found");
+    },
+  });
+  assert.equal(result.scanned, 1);
+  assert.equal(result.synced, 1);
+  const stored = await repo.byId(stale.id);
+  assert.equal(stored?.status, "CANCELLED");
+  assert.equal(stored?.primary_ip, null);
+  assert.equal(stored?.username, null);
+  assert.equal(stored?.password_enc, null);
+  assert.match(stored?.error ?? "", /no longer has this server/i);
 });
 
 test("each run is bounded by the limit", async () => {

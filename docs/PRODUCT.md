@@ -18,7 +18,8 @@ servers; our business handles pricing, payments, support and customer records.
   (D-018, D-019, D-032). One staging order was verified end to end and its
   credential email received before production was enabled in the same reviewed
   change that removed the D-024 guard; production was released on 2026-11-02.
-  A paid order provisions a server through the durable Workflow. A
+  A paid order provisions a server through the durable Workflow. A deleted
+  supplier service marks the order `CANCELLED` and clears stored credentials. A
   five-minute bounded reconciliation run re-syncs stuck orders and re-dispatches
   `PAID` fulfilment only while that environment's switch is on (D-020). Checkout
   checks the live supplier balance (plus a configurable renewal reserve) before

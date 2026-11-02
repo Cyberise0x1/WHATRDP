@@ -1,4 +1,4 @@
-import { getCredentials, getServer } from "./rdpmonster";
+import { getCredentials, getServer, isMissingServerError } from "./rdpmonster";
 import { decryptSecret, encryptSecret } from "./crypto";
 import { claimCredentials, getOrderById, getOrderByToken, updateOrder, type Order } from "./store";
 import { mapServerStatus } from "./order-status";
@@ -31,7 +31,16 @@ export async function syncOrder(order: Order, force = false): Promise<Order> {
     }
 
     return current;
-  } catch {
+  } catch (error) {
+    if (isMissingServerError(error)) {
+      return updateOrder(order.id, {
+        status: "CANCELLED",
+        primary_ip: null,
+        username: null,
+        password_enc: null,
+        error: "The provider no longer has this server. It was cancelled or removed.",
+      });
+    }
     const message = "Status check failed. Contact support if this persists.";
     return updateOrder(order.id, { error: message });
   }

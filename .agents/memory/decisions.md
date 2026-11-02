@@ -405,3 +405,18 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** monitor the first real order end to end; a Worker rollback
   does not reverse D1 writes or supplier orders, so reconcile those explicitly.
   Keep release authority in the workflow.
+
+- **D-034 · 2026-11-02 · CommandCode** — A supplier `404` for a linked service is
+  authoritative deletion, not a transient error. Both `syncOrder` (supplier
+  webhook and order-page refresh) and the five-minute reconciliation mark the
+  order `CANCELLED`, clear the stored IP, username and encrypted password, and
+  record a non-retryable message. Non-404 read failures keep the current status
+  and remain retryable. The order page hides credentials because it only reveals
+  them for `ACTIVE` orders.
+  **Why:** a cancelled or deleted server must not leave an `ACTIVE` order
+  showing credentials that no longer work; a `5xx` or timeout is not proof of
+  deletion and must not cancel a live server.
+  **How to apply:** only a `404` maps to cancellation; never treat a transient
+  supplier failure as deletion. The staging test server for order 4 is set to
+  cancel at period end (`autoRenew=false`, expires 2026-12-02), not destroyed
+  immediately.
