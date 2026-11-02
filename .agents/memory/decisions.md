@@ -434,3 +434,13 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   the first real production order still needs end-to-end monitoring.
   **How to apply:** keep the 404 rule for deletion and never cancel on a
   transient failure.
+
+- **D-036 · 2026-11-02 · CommandCode** — `www.whatrdp.com` now resolves through
+  a proxied CNAME to `whatrdp.com`, and a zone-level Single Redirect rule returns
+  301 to `https://whatrdp.com` with path and query preserved. No Worker custom
+  domain or application change is required; the redirect happens at the edge
+  before the Worker.
+  **Why:** close the `www` launch gap without duplicating the app or changing
+  code.
+  **How to apply:** keep the redirect rule; if the apex hostname ever changes,
+  update the rule target.
