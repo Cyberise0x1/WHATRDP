@@ -14,19 +14,17 @@ servers; our business handles pricing, payments, support and customer records.
 - Provider HMAC verification and authoritative service-status synchronization.
 - Conditional payment/provisioning claims, bounded read retries and review
   handling for ambiguous billable requests.
-- **Checkout is implemented and enabled on staging only** (D-018). Production
-  forces checkout closed by server-side policy (D-024), so a public release
-  answers 503 until fulfilment is enabled and verified. Fulfilment is enabled on
-  staging only: a paid staging order provisions a server, while production stays
-  disabled. Durable Workflow fulfilment is implemented
-  but inert behind `PROVISIONING_ENABLED=false` in production (D-019). A
-  five-minute bounded
-  reconciliation run re-syncs stuck orders and re-dispatches unpaid fulfilment
-  only while that switch is on (D-020). Checkout checks the live
-  supplier balance (plus a configurable renewal reserve) before creating an
-  order and fails closed if it cannot be verified (D-021). Checkout is rate-limited per
-  client IP and supports Turnstile verification when both keys are configured
-  (D-023).
+- **Checkout and fulfilment are implemented and enabled in both environments**
+  (D-018, D-019, D-032). One staging order was verified end to end and its
+  credential email received before production was enabled in the same reviewed
+  change that removed the D-024 guard; production opens on the next gated
+  release. A paid order provisions a server through the durable Workflow. A
+  five-minute bounded reconciliation run re-syncs stuck orders and re-dispatches
+  `PAID` fulfilment only while that environment's switch is on (D-020). Checkout
+  checks the live supplier balance (plus a configurable renewal reserve) before
+  creating an order and fails closed if it cannot be verified (D-021). Checkout
+  is rate-limited per client IP and supports Turnstile verification when both
+  keys are configured (D-023).
 
 ## Intended launch, not completed features
 

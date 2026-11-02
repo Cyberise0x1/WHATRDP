@@ -30,9 +30,9 @@ Svix signature and authoritative settlement before constructing a confirmation.
 it validates the request, writes the order (USD cost basis plus charged amount),
 then asks Zeno for a hosted checkout and stores its reference. It fails closed —
 before catalogue access, persistence or any gateway call — while
-`CHECKOUT_AVAILABLE` is false in `src/lib/checkout-config.ts` (currently true on
-staging, still closed on the released production build; D-018), and the webhook is
-the only caller of the settlement seam. Checkout is USD-only; the charged-currency
+`CHECKOUT_AVAILABLE` is false in `src/lib/checkout-config.ts` (true since D-018;
+production's target-specific guard was removed in D-032), and the webhook is the
+only caller of the settlement seam. Checkout is USD-only; the charged-currency
 columns stay so a legacy row can still never settle the wrong currency.
 
 `migrations/0001_orders.sql` is the immutable historical baseline.
@@ -78,6 +78,7 @@ private/no-store, and order pages use no-referrer/noindex headers.
 Local emulator, staging and production databases must be separate. The checked-in
 D1 ID is a local placeholder. Deployment preparation rejects placeholders,
 environment-name mismatches and shared staging/production IDs; it always selects
-the normal Worker entry point with provisioning disabled.
+the normal Worker entry point with the reviewed per-environment provisioning
+switch.
 
 See [security](SECURITY.md) for known launch gaps.

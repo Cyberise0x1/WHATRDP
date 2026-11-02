@@ -3,13 +3,13 @@ import { resolve } from "node:path";
 export type Environment = "staging" | "production";
 type Variables = Record<string, string | undefined>;
 
-// The only place fulfilment is enabled. Both entries stay false until:
-//   staging    — supplier balance funded, reseller products defined, reserve set
-//   production — one staging order verified end to end and the D-024 guard removed
-// Changing an entry is a reviewed code change, never configuration (D-019/D-026).
+// The only place fulfilment is enabled. Staging was verified with one real order
+// (2026-11-02); production is enabled in the same reviewed change that removed
+// the D-024 checkout guard (D-032). Changing an entry is a reviewed code change,
+// never configuration (D-019/D-026).
 export const FULFILMENT_ENABLED: Record<Environment, boolean> = {
   staging: true,
-  production: false,
+  production: true,
 };
 
 export function provisioningEnabled(

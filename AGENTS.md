@@ -10,12 +10,13 @@ implementation notes.
 
 - One root-level Next.js app on Cloudflare Workers/OpenNext and D1.
 - Provider-managed RDP inventory; this app does not host the virtual machines.
-- Zeno is the selected gateway. Its checkout adapter and webhook verification
-  exist, but checkout stays closed until a real payment is verified end to end.
+- Zeno is the selected gateway. Checkout and fulfilment were verified end to end
+  on staging (order 4, 2026-11-02) and are enabled in production by the reviewed
+  D-032 change; production changes only through the gated release.
 - Checkout is USD-only; catalogue prices and charges are USD. NGN was removed on
   2026-10-30 (D-017).
-- Checkout stays disabled until a verified gateway is deliberately enabled by
-  flipping `CHECKOUT_AVAILABLE`, never by configuration alone.
+- Checkout is gated only by `CHECKOUT_AVAILABLE` after the deliberate enablement
+  in D-018/D-032. Never add an environment override.
 - Persist provisioning intent before any billable supplier request. An uncertain
   result must never trigger an automatic repeat.
 

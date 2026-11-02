@@ -122,9 +122,9 @@ export async function POST(request: Request) {
       });
     }
 
-    // Dispatch after settlement. It is inert while PROVISIONING_ENABLED is false,
-    // and a dispatch failure must not undo the recorded payment; the order stays
-    // PAID for reconciliation.
+    // Dispatch after settlement when the environment's provisioning switch is on.
+    // A dispatch failure must not undo the recorded payment; the order stays PAID
+    // for reconciliation.
     if (result.kind === "paid") {
       try {
         await startProvisionWorkflow(result.order.id);

@@ -4,10 +4,11 @@ A single Next.js/TypeScript application for reselling provider-managed remote
 servers. The website and API target Cloudflare Workers through OpenNext, with D1
 for production storage. The actual servers remain with RDP.monster.
 
-**Not ready for paid launch.** Catalogue browsing and existing order views work,
-but checkout is deliberately disabled. The selected Zeno integration, customer
-accounts and durable fulfilment are separate work. No deployment is enabled by
-default.
+**Controlled pilot.** Catalogue browsing, Zeno checkout and durable fulfilment
+are implemented and enabled in both environments after one staging order was
+verified end to end (D-032). Production changes only through the gated
+`Deploy production` workflow. Customer accounts, legal pages, refunds and
+dispute handling remain out of scope for the pilot.
 
 ## Local development
 

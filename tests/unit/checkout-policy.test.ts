@@ -1,20 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkoutEnabled } from "../../src/lib/checkout-policy";
+import { CHECKOUT_AVAILABLE } from "../../src/lib/checkout-config";
 
-test("production checkout stays closed even when the master switch is on", () => {
-  assert.equal(checkoutEnabled("cloudflare-production"), false);
-  assert.equal(checkoutEnabled("cloudflare-staging"), true);
-  assert.equal(checkoutEnabled("local"), true);
+test("checkout follows the master switch in every environment", () => {
+  assert.equal(CHECKOUT_AVAILABLE, true);
+  assert.equal(checkoutEnabled(), true);
 });
 
-test("the deployment target is read at call time on the server", () => {
+test("the removed production guard cannot be reintroduced by deployment target", () => {
   const original = process.env.DEPLOYMENT_TARGET;
   try {
-    delete process.env.DEPLOYMENT_TARGET;
-    assert.equal(checkoutEnabled(), true);
     process.env.DEPLOYMENT_TARGET = "cloudflare-production";
-    assert.equal(checkoutEnabled(), false);
+    assert.equal(checkoutEnabled(), true);
   } finally {
     if (original === undefined) delete process.env.DEPLOYMENT_TARGET;
     else process.env.DEPLOYMENT_TARGET = original;

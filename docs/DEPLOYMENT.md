@@ -2,36 +2,36 @@
 
 ## Status and prerequisites
 
-**Live resources (updated 2026-11-01).** Both environments are released.
+**Live resources (updated 2026-11-02).** Both environments are released.
 Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
-`whatrdp-production` (migrations 0001–0005 verified remotely; `0005` applied
-2026-11-01). Migration `0006` adds credential-email tracking and must be applied
-before the next release. The public
+`whatrdp-production` (migrations 0001–0006 verified remotely; `0006` applied
+2026-11-01). The public
 `*.workers.dev` route is disabled and the custom domain holds the TLS
 certificate. Staging serves
 `https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
-`APP_SECRET` and `RDP_MONSTER_API_TOKEN` are set on both through the dashboard;
-`ALERT_WEBHOOK_URL` is also set on both (Telegram, 2026-11-01). Credential email
-uses the Cloudflare Email Service `send_email` binding (`EMAIL`); it has no API
-key, but the domain must be onboarded and `EMAIL_FROM` set first.
-The storefront renders and `/api/catalog` returns 200. Staging runs with
-checkout enabled (D-018) and the `ZENO_API_KEY` secret, pending one verified
-payment; the released production build still answers 503
-`payments_not_configured`, so no public sales are possible. Fulfilment remains
-disabled in both environments.
+`APP_SECRET`, `RDP_MONSTER_API_TOKEN`, `RDPM_WEBHOOK_SECRET`, `ZENO_API_KEY`,
+`ZENO_WEBHOOK_SECRET`, `TURNSTILE_SECRET_KEY` and `ALERT_WEBHOOK_URL` are set on
+both through the dashboard (Telegram, 2026-11-01). Credential email uses the
+Cloudflare Email Service `send_email` binding (`EMAIL`); the domain is onboarded
+and `EMAIL_FROM` is set. The storefront renders and `/api/catalog` returns 200.
+Staging ran one real order (order 4, $15.99 USDC) to `ACTIVE` and delivered its
+credential email on 2026-11-02. The reviewed production enablement (D-032) turns
+checkout and fulfilment on; the currently released production build stays closed
+until the gated **Deploy production** workflow runs.
 
-Production was released through `Deploy production` at `c6e4784` after the
-environment gate (required reviewer, `PRODUCTION_POLICY_READ_TOKEN`, typed
-`DEPLOY`). `www.whatrdp.com` has **no** DNS record and does not resolve — only the
-apex is attached. The checked-in D1 ID is local-only; real IDs live in repository
-variables.
+Production was last released through `Deploy production` at `8fb6d7c` (Worker
+version `dc640df8`, 2026-11-01) with credential-email support. The earlier
+`c6e4784` release established the environment gate (required reviewer,
+`PRODUCTION_POLICY_READ_TOKEN`, typed `DEPLOY`). `www.whatrdp.com` has **no** DNS
+record and does not resolve — only the apex is attached. The checked-in D1 ID is
+local-only; real IDs live in repository variables.
 
 Both workflows are enabled and have run; production was released manually through
 the gated workflow.
 
 The owner must separately approve repository connection, staging resources,
-least-privilege credentials and any publishing. Checkout remains disabled even
-after a release; hosting setup is not launch readiness.
+least-privilege credentials and any publishing. Checkout follows the reviewed
+switch; hosting setup is not launch readiness.
 
 **Release authority (updated 2026-10-30).** The repository is now **public** on
 GitHub Free. That makes environments, environment secrets, deployment branch
@@ -145,13 +145,13 @@ preparation always points `main` at it — never at the generated
 exports `fetch`. The configuration also declares a per-environment Workflow
 (`<worker-name>-provision`, class `ProvisionWorkflow`, binding
 `PROVISION_WORKFLOW`). Fulfilment is a per-environment switch,
-`FULFILMENT_ENABLED` in `scripts/lib/deployment.ts`; staging is `true` and
-production is `false`, so on production a settled order stays `PAID` and no
-Workflow is dispatched.
+`FULFILMENT_ENABLED` in `scripts/lib/deployment.ts`; both are `true` since the
+reviewed enablement (D-032), so a settled order dispatches the Workflow in either
+environment.
 The generated deploy configuration always wins over an environment variable or
 the checked-in `wrangler.jsonc`; enabling it by configuration is impossible.
 
-Activation order (steps 1–3 done 2026-11-02):
+Activation order (steps 1–5 done 2026-11-02):
 
 1. Staging only after the supplier balance is funded, reseller products exist
    and `SUPPLIER_RESERVE_CENTS` is set. Balance is $300 (Gold, 25%); reseller
@@ -164,10 +164,12 @@ Activation order (steps 1–3 done 2026-11-02):
 3. Set `staging: true`, update the current-state assertion in
    `tests/unit/deployment.test.ts`, and merge the reviewed change. Staging
    deploys automatically after green CI.
-4. Verify one paid order reaches `ACTIVE` and reveals credentials.
-5. Set `production: true` only in the same reviewed change that removes the
-   D-024 guard, after step 4. Production stays inert until then, including its
-   reconcile cron.
+4. Verified: staging order 4 ($15.99 USDC) reached `ACTIVE` and revealed its
+   credentials; the credential email was received at 12:45 UTC (13:45 local).
+5. `production: true` and the D-024 guard were removed in the same reviewed
+   change (D-032). Production `orders` was empty, so enabling its reconcile cron
+   cannot dispatch a pre-existing order. The Worker arms on the next gated
+   release.
 
 A scheduled handler (`*/5 * * * *` in the generated configuration) reconciles
 at most 25 orders per run: it re-dispatches the Workflow for old `PAID` orders
@@ -226,15 +228,16 @@ Turnstile is **config-gated and must be enabled before public sales**:
 Setting `TURNSTILE_SITE_KEY` without the secret leaves the widget visible but
 unverified, and setting only the secret makes checkout fail for every browser.
 
-### Production stays closed
+### Production checkout guard (removed)
 
-`checkoutEnabled()` (server-side) keeps checkout closed when
+Until 2026-11-02, `checkoutEnabled()` (server-side) forced checkout closed when
 `DEPLOYMENT_TARGET=cloudflare-production`, regardless of `CHECKOUT_AVAILABLE`.
-Staging remains open for controlled testing. This exists because production
-holds Zeno keys: funding the supplier balance must not silently open real
-payments while provisioning is disabled. Removing the guard is a reviewed code
-change, made only after fulfilment is enabled and one supplier order has been
-verified end to end. It is not a configuration toggle.
+It existed because production holds Zeno keys: funding the supplier balance must
+not silently open real payments while provisioning was disabled (D-024).
+The guard was removed in the reviewed D-032 change after fulfilment was enabled
+and one staging order had been verified end to end. `checkoutEnabled()` now
+follows `CHECKOUT_AVAILABLE` in every environment; re-adding a target-specific
+guard is a reviewed code change, not a configuration toggle.
 
 ## 4. Staging then production
 
@@ -246,7 +249,8 @@ Production is manual: run **Deploy production** on main and enter `DEPLOY`.
 The workflow reruns CI, waits for production-environment approval, verifies
 required reviewers, rebuilds the normal Worker, rejects unsafe bindings, checks
 the remote migration ledger read-only and then deploys. Per-environment concurrency
-prevents overlapping releases. Deploys always keep provisioning disabled.
+prevents overlapping releases. Deploys use the reviewed per-environment
+provisioning switches; no environment variable or ad-hoc deploy can change them.
 
 Never use `tests/fixtures/wrangler.jsonc` for deployment. Generated approved
 configuration selects `.open-next/worker.js`, never the fixture SQL endpoint.

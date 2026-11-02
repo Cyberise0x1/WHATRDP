@@ -2,11 +2,11 @@
 
 ## Current limitations
 
-Checkout is implemented and enabled on staging (D-018); production forces it
-closed by server-side policy until fulfilment is verified (D-024), so
-public requests answer 503. Fulfilment is enabled on staging and inert in
-production behind `PROVISIONING_ENABLED`
-(D-019), and a five-minute reconciliation run handles stuck orders (D-020).
+Checkout and fulfilment are enabled in both environments (D-018, D-019, D-032)
+after one staging order was verified end to end. The server-side guard that
+forced production closed (D-024) has been removed; production opens with the
+next gated release. A five-minute reconciliation run handles stuck orders
+(D-020).
 
 Order URLs are **bearer credentials**: anyone with a valid link can view that
 order and, once `ACTIVE`, its revealed server credentials. The owner accepted
@@ -14,10 +14,10 @@ bearer links as the access model for the controlled pilot (D-022); customer
 accounts and ownership checks remain future hardening, not a current feature.
 Responses and pages are `private, no-store` with `no-referrer` and
 `X-Robots-Tag: noindex`, and order tokens must never be logged or shared.
-A per-IP checkout rate limit is deployed, and optional Turnstile
-verification is implemented but only active once both keys are configured
-(D-023). Operational alerting is implemented (D-028/D-029); staff access
-controls remain open before public sales.
+A per-IP checkout rate limit and Turnstile verification are deployed (D-023);
+both Turnstile keys are configured on staging and production. Operational
+alerting is implemented (D-028/D-029); staff access controls remain out of scope
+for the pilot.
 
 ## Secrets and stored data
 

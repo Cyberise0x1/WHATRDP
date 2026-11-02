@@ -75,8 +75,9 @@ test("deployment always overrides fixture entry points and unsafe feature flags"
   assert.equal(config.ratelimits[0].simple.period, 60);
 });
 
-test("fulfilment is per environment and off until reviewed", () => {
-  assert.deepEqual(FULFILMENT_ENABLED, { staging: true, production: false });
+test("fulfilment is per environment and enabled after reviewed verification", () => {
+  assert.deepEqual(FULFILMENT_ENABLED, { staging: true, production: true });
+  assert.equal(deploymentConfig("production", approved, {}).vars.PROVISIONING_ENABLED, "true");
 
   const stagingOnly = { staging: true, production: false };
   assert.equal(provisioningEnabled("staging", stagingOnly), "true");

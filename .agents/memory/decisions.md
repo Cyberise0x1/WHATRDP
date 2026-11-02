@@ -365,3 +365,24 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   set `EMAIL_FROM` and the per-environment `*_PUBLIC_BASE_URL`, and apply
   `0006_credentials_email.sql` before the next release. Never log the address,
   password or message body; keep the order page as the durable fallback.
+
+- **D-032 · 2026-11-02 · CommandCode (owner-approved enablement)** — Production
+  checkout and fulfilment are enabled in one reviewed change:
+  `FULFILMENT_ENABLED.production = true` in `scripts/lib/deployment.ts` and the
+  D-024 target guard removed from `src/lib/checkout-policy.ts`, so
+  `checkoutEnabled()` follows `CHECKOUT_AVAILABLE` in every environment.
+  Preconditions verified read-only: staging order 4 ($15.99 USDC) reached
+  `ACTIVE` and its credential email was received; production has
+  `ZENO_API_KEY`, `ZENO_WEBHOOK_SECRET`, `TURNSTILE_SECRET_KEY`, the email
+  binding and sender, and migrations 0001–0006 applied; production `orders` is
+  empty, so arming the five-minute reconcile cannot dispatch a pre-existing
+  `PAID` order.
+  **Why:** the owner approved enablement after receiving the staging credential
+  email, and D-024/D-026 require this exact reviewed change rather than a
+  configuration toggle.
+  **Consequence:** the next gated **Deploy production** release opens real
+  payments and arms the production Workflow and reconcile cron; the currently
+  deployed Worker stays closed until that run.
+  **How to apply:** release only through the production workflow, record the
+  previous Worker version (`0dbeb585`) for rollback, and keep the supplier
+  balance funded; never add an environment override for checkout or fulfilment.
