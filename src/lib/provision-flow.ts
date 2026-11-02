@@ -36,6 +36,16 @@ export interface ProvisionDeps {
 
 const TERMINAL = ["FAILED", "TERMINATED", "EXPIRED", "SUSPENDED", "CANCELLED"];
 
+// Workflows rejects `retries.limit: 0` and partial retry objects as an invalid
+// step config. One retry is safe everywhere: the billable create claims first
+// and never throws, and every other step here is an idempotent DB operation.
+const SAFE_RETRY = {
+  retries: { limit: 1, delay: "1 second", backoff: "constant" as const },
+};
+const READ_RETRY = {
+  retries: { limit: 2, delay: "2 seconds", backoff: "exponential" as const },
+};
+
 export async function runProvisionFlow(
   env: ProvisionEnv,
   orderId: number,
@@ -54,14 +64,14 @@ export async function runProvisionFlow(
 
   // Persist intent before the billable request. The conditional UPDATE is the
   // at-most-once guard: any later run loses this claim and returns.
-  const claimed = await step.do("claim provisioning", { retries: { limit: 0 } }, () =>
+  const claimed = await step.do("claim provisioning", SAFE_RETRY, () =>
     repo.claimProvision(order.id),
   );
   if (!claimed) return "claimed_elsewhere";
 
   const created = await step.do(
     "create server",
-    { retries: { limit: 0 }, timeout: "2 minutes" },
+    { ...SAFE_RETRY, timeout: "2 minutes" },
     async () => {
       try {
         const response = await deps.create(
@@ -90,7 +100,7 @@ export async function runProvisionFlow(
       message: created.message,
       context: { orderId: claimed.id, certainRejection: created.certainRejection },
     });
-    await step.do("record creation failure", { retries: { limit: 0 } }, () =>
+    await step.do("record creation failure", SAFE_RETRY, () =>
       repo.update(claimed.id, {
         status: created.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
         error: created.message,
@@ -99,26 +109,21 @@ export async function runProvisionFlow(
     return created.certainRejection ? "failed" : "review_required";
   }
 
-  let current: Order = await step.do("persist service id", { retries: { limit: 0 } }, () =>
+  let current: Order = await step.do("persist service id", SAFE_RETRY, () =>
     repo.update(claimed.id, { service_id: created.id, error: null }),
   );
 
   const attempts = deps.pollAttempts ?? 30;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await step.sleep(`wait for activation ${attempt}`, deps.pollDelay ?? "10 seconds");
-    const snapshot = await step.do(
-      `fetch server ${attempt}`,
-      { retries: { limit: 2 } },
-      async () => {
-        const server = await deps.getServer(created.id, auth);
-        return {
-          status: server.status,
-          ip:
-            server.ips?.find((entry) => entry.primary)?.address ?? server.ips?.[0]?.address ?? null,
-        };
-      },
-    );
-    current = await step.do(`record status ${attempt}`, { retries: { limit: 0 } }, () =>
+    const snapshot = await step.do(`fetch server ${attempt}`, READ_RETRY, async () => {
+      const server = await deps.getServer(created.id, auth);
+      return {
+        status: server.status,
+        ip: server.ips?.find((entry) => entry.primary)?.address ?? server.ips?.[0]?.address ?? null,
+      };
+    });
+    current = await step.do(`record status ${attempt}`, SAFE_RETRY, () =>
       repo.update(claimed.id, {
         status: mapServerStatus(snapshot.status),
         primary_ip: snapshot.ip,
@@ -128,10 +133,10 @@ export async function runProvisionFlow(
   }
 
   if (current.status === "ACTIVE" && !current.password_enc) {
-    const credentials = await step.do("fetch credentials", { retries: { limit: 2 } }, () =>
+    const credentials = await step.do("fetch credentials", READ_RETRY, () =>
       deps.getCredentials(created.id, auth),
     );
-    const stored = await step.do("store credentials", { retries: { limit: 0 } }, () =>
+    const stored = await step.do("store credentials", SAFE_RETRY, () =>
       repo.claimCredentials(
         claimed.id,
         credentials.user,
@@ -140,7 +145,7 @@ export async function runProvisionFlow(
     );
     if (stored) {
       // Delivery never throws; a failed email must not fail a fulfilled order.
-      await step.do("send credentials email", { retries: { limit: 0 } }, async () =>
+      await step.do("send credentials email", SAFE_RETRY, async () =>
         deps.deliverCredentials
           ? await deps.deliverCredentials(stored)
           : await deliverCredentialsEmail(env, repo, stored),

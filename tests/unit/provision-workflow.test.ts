@@ -272,3 +272,43 @@ test("the provisioning claim is conditional and cannot be won twice", async () =
   assert.ok(await repo.claimProvision(order.id));
   assert.equal(await repo.claimProvision(order.id), null);
 });
+
+test("every Workflow step config is accepted by the engine", async () => {
+  const order = await paidOrder("buyer@example.test");
+  const configs: { name: string; config: unknown }[] = [];
+  const capturingStep = {
+    async do(...args: unknown[]) {
+      const callback = args.find((arg) => typeof arg === "function") as () => Promise<unknown>;
+      if (args[1] && typeof args[1] === "object") {
+        configs.push({ name: String(args[0]), config: args[1] });
+      }
+      return callback();
+    },
+    async sleep() {},
+    async sleepUntil() {},
+  } as unknown as WorkflowStep;
+
+  await runProvisionFlow(env, order.id, {
+    repo,
+    create: async () => ({ data: { id: "srv_1" } }),
+    getServer: async () => server("ACTIVE"),
+    getCredentials: async () => ({ user: "Administrator", password: "x" }),
+    encrypt: (plain) => plain,
+    step: capturingStep,
+    pollAttempts: 1,
+    pollDelay: "0 seconds",
+  });
+
+  assert.ok(configs.length > 0, "the flow must configure its steps");
+  for (const { name, config } of configs) {
+    const retries = (config as { retries?: Record<string, unknown> }).retries;
+    if (!retries) continue;
+    // The Workflows engine rejects limit 0 and partial retry objects.
+    assert.ok(Number(retries.limit) >= 1, `${name}: retries.limit must be >= 1`);
+    assert.notEqual(retries.delay, undefined, `${name}: retries.delay is required`);
+    assert.ok(
+      ["constant", "linear", "exponential"].includes(String(retries.backoff)),
+      `${name}: retries.backoff must be a valid backoff`,
+    );
+  }
+});
