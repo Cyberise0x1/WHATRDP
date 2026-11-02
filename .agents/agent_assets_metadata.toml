@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "ddDHrjDpWUoRLhZyY44WV"
+uri = "file://attached_assets/image_1793616937555.png"
+type = "image"
+title = "Zeno webhook endpoints"
+description = "Original uploaded screenshot, unchanged."
+logical_id = "67c72a78-569b-40e8-a017-eec4be862daa"
+content_hash = "sha256:fb69e0acd07ca7cac212f0b863f219924aa19e02d0b2f9f9c85976b15e15a4b2"
+size = 114037
+mtime_ms = 1793616942934
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:eea68781-6d27-4078-b7dd-3bf06a778f50/67c72a78-569b-40e8-a017-eec4be862daa/e3de0799-1e27-480b-8cd0-b63ee0c6f407"
+storage_version_token = "1793616967765071"
+content_type = "image/png"
