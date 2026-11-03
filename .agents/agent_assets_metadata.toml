@@ -14,3 +14,17 @@ mtime_ms = 1793616942934
 storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:eea68781-6d27-4078-b7dd-3bf06a778f50/67c72a78-569b-40e8-a017-eec4be862daa/e3de0799-1e27-480b-8cd0-b63ee0c6f407"
 storage_version_token = "1793616967765071"
 content_type = "image/png"
+
+[[outputs]]
+id = "H8Y5sFvYGVb_WQFS_kvE_"
+uri = "file://attached_assets/whatRDP_smshinglogo_1793731710238.png"
+type = "image"
+title = "WhatRDP logo"
+description = "Original uploaded logo, unchanged."
+logical_id = "56960d15-cd22-44d1-9e25-c946c2959a04"
+content_hash = "sha256:448532cea84643c37e6fe1c77738199101ef068280b265f78e2d80214d3737f0"
+size = 7615
+mtime_ms = 1793731712327
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:eea68781-6d27-4078-b7dd-3bf06a778f50/56960d15-cd22-44d1-9e25-c946c2959a04/0138a641-efa5-43dd-b991-95e52b83fc9b"
+storage_version_token = "1793731742665534"
+content_type = "image/png"
