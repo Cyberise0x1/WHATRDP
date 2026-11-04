@@ -40,11 +40,18 @@ const catalog = {
 let directory: string;
 let repo: OrderRepository;
 let zenoCalls: { body: Record<string, unknown> }[] = [];
+let capacityQuotes: { body: Record<string, unknown> }[] = [];
+let orderCountAtCapacityQuote = -1;
 let orderExistedAtGatewayCall = false;
 let originalFetch: typeof fetch;
 
 function stubGateway(
-  options: { fail?: boolean; balanceCents?: number; accountFails?: boolean } = {},
+  options: {
+    fail?: boolean;
+    balanceCents?: number;
+    accountFails?: boolean;
+    capacityStatus?: number;
+  } = {},
 ) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -61,6 +68,23 @@ function stubGateway(
           rateLimitPerMinute: 120,
         },
       });
+    }
+    if (
+      url.includes("dashboard.rdp.monster") &&
+      (init?.method ?? "GET").toUpperCase() === "POST" &&
+      url.endsWith("/servers")
+    ) {
+      capacityQuotes.push({
+        body: JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>,
+      });
+      orderCountAtCapacityQuote = (await repo.recent()).length;
+      if ((options.capacityStatus ?? 200) >= 400) {
+        return Response.json(
+          { error: "out_of_stock", message: "out of stock" },
+          { status: options.capacityStatus },
+        );
+      }
+      return Response.json({ data: { dryRun: true } });
     }
     if (url.includes("turnstile.fixture")) {
       const params = new URLSearchParams(String(init?.body ?? ""));
@@ -104,6 +128,8 @@ before(async () => {
 
 beforeEach(async () => {
   zenoCalls = [];
+  capacityQuotes = [];
+  orderCountAtCapacityQuote = -1;
   orderExistedAtGatewayCall = false;
   delete process.env.SUPPLIER_RESERVE_CENTS;
   delete process.env.TURNSTILE_SECRET_KEY;
@@ -129,6 +155,19 @@ test("persists the order before the gateway call and returns the hosted checkout
   assert.match(result.token, /^[\w-]+$/);
   assert.equal(result.checkoutUrl, "https://pay.zeno.fixture/ch_fixture");
   assert.equal(orderExistedAtGatewayCall, true, "order must exist before the gateway call");
+
+  // The capacity quote is a documented non-billable dry run, taken before the
+  // order row exists and before the gateway call.
+  assert.equal(capacityQuotes.length, 1);
+  assert.deepEqual(capacityQuotes[0].body, {
+    plan: "europe/1",
+    os: "windows-2022",
+    cycle: "MONTHLY",
+    quantity: 1,
+    dryRun: true,
+    requireCapacity: true,
+  });
+  assert.equal(orderCountAtCapacityQuote, 0, "no order may exist when capacity is quoted");
 
   const order = await repo.byPaymentReference("ch_fixture");
   assert.ok(order);
@@ -247,6 +286,40 @@ test("a low supplier balance blocks checkout before any order or payment", async
       error instanceof CheckoutError &&
       error.code === "insufficient_supplier_balance" &&
       error.status === 503,
+  );
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+  assert.equal(capacityQuotes.length, 0, "the balance gate runs before the capacity quote");
+});
+
+test("an out-of-stock plan fails checkout closed before any order or payment", async () => {
+  stubGateway({ capacityStatus: 409 });
+  await assert.rejects(
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
+    (error: unknown) =>
+      error instanceof CheckoutError && error.code === "plan_unavailable" && error.status === 503,
+  );
+  assert.equal(capacityQuotes.length, 1, "the capacity quote must run before the order");
+  assert.equal((await repo.recent()).length, 0);
+  assert.equal(zenoCalls.length, 0);
+});
+
+test("an unverifiable capacity quote fails checkout closed", async () => {
+  stubGateway({ capacityStatus: 500 });
+  await assert.rejects(
+    createOrderCheckout({
+      sku: "europe/1",
+      os: "windows-2022",
+      cycle: "MONTHLY",
+      email: "buyer@example.test",
+    }),
+    (error: unknown) =>
+      error instanceof CheckoutError && error.code === "plan_unavailable" && error.status === 503,
   );
   assert.equal((await repo.recent()).length, 0);
   assert.equal(zenoCalls.length, 0);

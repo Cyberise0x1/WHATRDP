@@ -273,6 +273,39 @@ export async function findServerByLabel(
   return null;
 }
 
+export interface CapacityQuote {
+  plan: string;
+  os: string;
+  cycle: string;
+}
+
+/**
+ * Ask the supplier whether it can provision this plan right now. `dryRun` is a
+ * documented, non-billable quote and `requireCapacity` makes stock an explicit
+ * precondition, so a 409 out_of_stock is a business answer, not a fault.
+ * Checkout calls this before any order row exists.
+ */
+export async function quoteServerCapacity(
+  payload: CapacityQuote,
+  auth?: SupplierAuth,
+): Promise<void> {
+  await api(
+    "/servers",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        plan: payload.plan,
+        os: payload.os,
+        cycle: payload.cycle,
+        quantity: 1,
+        dryRun: true,
+        requireCapacity: true,
+      }),
+    },
+    { retries: 0, auth },
+  );
+}
+
 export async function createServer(
   payload: Record<string, unknown>,
   auth?: SupplierAuth,

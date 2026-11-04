@@ -32,6 +32,9 @@ Cyberise project.
   `PAID` fulfilment only while that environment's switch is on (D-020). Checkout
   checks the live supplier balance (plus a configurable renewal reserve) before
   creating an order and fails closed if it cannot be verified (D-021). Checkout
+  also preflights supplier capacity with a documented non-billable dry-run quote
+  and refuses the sale before any payment when the plan cannot be provisioned,
+  for example when it is out of stock (D-042). Checkout
   is rate-limited per client IP and supports Turnstile verification when both
   keys are configured (D-023).
 

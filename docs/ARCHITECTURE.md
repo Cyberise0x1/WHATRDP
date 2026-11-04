@@ -27,8 +27,10 @@ twice inside the retry window.
 The gateway-neutral payment seam is internal only. A Zeno adapter verifies the
 Svix signature and authoritative settlement before constructing a confirmation.
 `POST /api/checkout` is the only route that creates orders and calls a gateway:
-it validates the request, writes the order (USD cost basis plus charged amount),
-then asks Zeno for a hosted checkout and stores its reference. It fails closed —
+it validates the request, checks the supplier's live balance (D-021) and
+capacity with a documented non-billable dry-run quote (D-042), then writes the
+order (USD cost basis plus charged amount) and asks Zeno for a hosted checkout,
+storing its reference. It fails closed —
 before catalogue access, persistence or any gateway call — while
 `CHECKOUT_AVAILABLE` is false in `src/lib/checkout-config.ts` (true since D-018;
 production's target-specific guard was removed in D-032), and the webhook is the

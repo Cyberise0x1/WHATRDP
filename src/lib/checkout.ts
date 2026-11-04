@@ -1,7 +1,7 @@
 import { loadShopCatalog, priceForCycle } from "./catalog";
 import { isCycle, type Cycle } from "./pricing";
 import { createOrder, updateOrder } from "./store";
-import { getAccount, ApiError } from "./rdpmonster";
+import { getAccount, quoteServerCapacity, ApiError } from "./rdpmonster";
 import { createCheckout } from "./zenobank";
 import { verifyTurnstile } from "./turnstile";
 import { raiseAlert } from "./alerts";
@@ -193,6 +193,29 @@ export async function createOrderCheckout(
       "Sales are temporarily paused while capacity is replenished. No payment was taken.",
       503,
       "insufficient_supplier_balance",
+    );
+  }
+
+  // Fail closed when the supplier cannot provision this plan right now (for
+  // example out of stock). The quote is a documented non-billable dry run, so
+  // no order row is persisted and no payment can be taken. A supplier auth,
+  // balance or 5xx failure has already alerted through the API client; this
+  // alert carries the plan and the supplier's own status/code.
+  try {
+    await quoteServerCapacity({ plan: plan.sku, os: input.os, cycle: input.cycle });
+  } catch (error) {
+    const supplierStatus = error instanceof ApiError ? error.status : 0;
+    const supplierCode = error instanceof ApiError ? error.code : "unreachable";
+    raiseAlert({
+      code: "checkout_blocked_supplier_capacity",
+      severity: supplierStatus === 409 ? "warning" : "critical",
+      message: "Checkout is blocked because the supplier cannot provision this plan right now",
+      context: { sku: plan.sku, os: input.os, cycle: input.cycle, supplierStatus, supplierCode },
+    });
+    throw new CheckoutError(
+      "This plan is temporarily unavailable. Please choose a different plan or try again shortly.",
+      503,
+      "plan_unavailable",
     );
   }
 
