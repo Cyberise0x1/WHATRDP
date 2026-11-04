@@ -459,3 +459,20 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** never add the provider name to customer-facing copy, email,
   public API errors or order errors; keep operator alerts specific, and keep the
   legal description generic unless counsel directs otherwise.
+
+- **D-038 · 2026-11-04 · user (approved staging release), CommandCode (delivery)** —
+  The storefront redesign and anonymous positioning were released to Cloudflare
+  staging. The first push (`651ddef`) failed GitHub `npm ci` because the gsap
+  entries still used Replit-internal registry URLs; the normalizer changed only
+  those two URLs, and `6cd1537` passed CI run 41820450271 and the automatic
+  **Deploy staging** run 41820714719 as Worker version
+  `651e378a-b6d8-4da3-a880-cdce7b5813dc`. Live staging checks: `/`,
+  `/anonymous-vps`, all four legal pages and `/api/catalog` return 200; customer
+  copy contains no provider name; production remains on `8b35299` (Worker
+  `1d6d2b4e-...`) because no production workflow was run.
+  **Why:** the owner asked for the newest storefront on staging for review.
+  **Consequence:** staging is anonymous-first; the release-record commit that
+  adds this entry triggers a second identical staging deploy.
+  **How to apply:** production still requires the gated **Deploy production**
+  workflow and explicit owner approval; never count a staging release as a
+  production release.
