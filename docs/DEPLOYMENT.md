@@ -2,11 +2,10 @@
 
 ## Status and prerequisites
 
-**Live resources (updated 2026-11-02).** Both environments are released.
+**Live resources (updated 2026-11-04).** Both environments are released.
 Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
-`whatrdp-production` (migrations 0001–0006 verified remotely; `0006` applied
-2026-11-01). The power-control migration `0007` is pending on both databases and
-must be applied before the release that includes the power controls. The public
+`whatrdp-production` (migrations 0001–0007 verified remotely; `0007` applied
+2026-11-04). The public
 `*.workers.dev` route is disabled and the custom domain holds the TLS
 certificate. Staging serves
 `https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
@@ -16,9 +15,10 @@ both through the dashboard (Telegram, 2026-11-01). Credential email uses the
 Cloudflare Email Service `send_email` binding (`EMAIL`); the domain is onboarded
 and `EMAIL_FROM` is set. The storefront renders and `/api/catalog` returns 200.
 Staging ran one real order (order 4, $15.99 USDC) to `ACTIVE` and delivered its
-credential email on 2026-11-02. Production was released through **Deploy
-production** at `0046808` (Worker version `2b821f4f`, 2026-11-02) with checkout
-and fulfilment enabled (D-032, D-033).
+credential email on 2026-11-02. Production was most recently released through
+**Deploy production** at `ec045fd` (Worker version `43459514`, 2026-11-04) with
+the audited power controls (D-041). The `0046808` release (Worker version
+`2b821f4f`, 2026-11-02) enabled checkout and fulfilment (D-032, D-033).
 
 Production was previously released through `Deploy production` at `8fb6d7c`
 (Worker version `dc640df8`, 2026-11-01) with credential-email support. The
@@ -122,10 +122,9 @@ or a migration is pending. Review and approve migrations separately, take a
 backup, and reconcile real orders before any remote change.
 
 `0007_power_control.sql` adds `orders.power_state`, `orders.power_checked_at` and
-the `power_actions` audit/throttle table. It is additive and nullable; apply it
-to staging and production before the release that includes the power controls.
-Rolling back the Worker alone leaves the table and columns in place, which is
-safe.
+the `power_actions` audit/throttle table. It was applied to staging and
+production on 2026-11-04. It is additive and nullable; rolling back the Worker
+alone leaves the table and columns in place, which is safe.
 
 The immutable baseline contains the historical gateway column. The additive
 second migration copies it to `payment_reference` and supplies USD currency.

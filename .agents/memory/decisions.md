@@ -508,3 +508,24 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   release that includes power controls; never bypass the D1 claim for a supplier
   power call, and keep audit rows free of tokens, credentials and customer
   contact data.
+
+- **D-041 · 2026-11-04 · user (approved), CommandCode (delivery)** — The power
+  controls and audit/throttle migration were released to production at
+  `ec045fd` through the gated **Deploy production** workflow (run `41920841164`;
+  checks and deploy green after required-reviewer approval) as Worker version
+  `43459514-8145-4f63-8e16-0b6f83a52637`. `0007_power_control.sql` was applied
+  to staging and production first and verified (`power_state`,
+  `power_checked_at`, `power_actions`). Live checks: `whatrdp.com` and
+  `/api/catalog` return 200; an unknown order token on the new action route
+  returns JSON 404. Production orders at release: 3 `PENDING_PAYMENT`, 1
+  `FAILED`, 0 `ACTIVE` with a linked service, so no customer panel currently
+  exposes power controls; they appear when an order reaches `ACTIVE`. The
+  previous production Worker version is
+  `1d6d2b4e-d46d-4b5f-a7de-26e7a793ab62` for rollback. No power action was fired
+  against a live server.
+  **Why:** the owner approved the production move after staging verification.
+  **Consequence:** production now runs the power-control code and schema; a
+  Worker rollback does not reverse the additive migration, which is safe.
+  **How to apply:** verify the first `ACTIVE` production order shows the power
+  panel; keep 0007 applied and never bypass the reviewer gate on future
+  releases.
