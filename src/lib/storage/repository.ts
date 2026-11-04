@@ -11,6 +11,8 @@ const PATCH_KEYS = new Set([
   "email",
   "service_id",
   "primary_ip",
+  "power_state",
+  "power_checked_at",
   "username",
   "password_enc",
   "error",
@@ -143,6 +145,31 @@ export class OrderRepository {
       )
       .bind(new Date().toISOString(), id)
       .first<Order>();
+  }
+
+  // One accepted power action per order per window. The conditional insert is
+  // atomic, so concurrent requests cannot both reach the supplier.
+  claimPowerAction(orderId: number, action: string, cooldownMs = 10_000) {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - Math.max(0, cooldownMs)).toISOString();
+    return this.db
+      .prepare(
+        `INSERT INTO power_actions (order_id, action, outcome, created_at, updated_at)
+       SELECT ?, ?, 'requested', ?, ?
+       WHERE NOT EXISTS (
+         SELECT 1 FROM power_actions WHERE order_id = ? AND created_at > ?
+       )
+       RETURNING id`,
+      )
+      .bind(orderId, action, now.toISOString(), now.toISOString(), orderId, cutoff)
+      .first<{ id: number }>();
+  }
+
+  finishPowerAction(id: number, outcome: string) {
+    return this.db
+      .prepare("UPDATE power_actions SET outcome = ?, updated_at = ? WHERE id = ? RETURNING id")
+      .bind(outcome, new Date().toISOString(), id)
+      .first<{ id: number }>();
   }
 
   // Credentials are written once. The CAS makes every concurrent writer safe;

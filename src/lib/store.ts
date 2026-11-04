@@ -31,6 +31,12 @@ export async function recentOrders(limit = 50) {
 export async function claimProvision(id: number) {
   return (await store()).claimProvision(id);
 }
+export async function claimPowerAction(orderId: number, action: string, cooldownMs?: number) {
+  return (await store()).claimPowerAction(orderId, action, cooldownMs);
+}
+export async function finishPowerAction(id: number, outcome: string) {
+  return (await store()).finishPowerAction(id, outcome);
+}
 export async function claimCredentials(id: number, username: string, passwordEnc: string) {
   return (await store()).claimCredentials(id, username, passwordEnc);
 }

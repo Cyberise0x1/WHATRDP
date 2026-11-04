@@ -5,7 +5,8 @@
 **Live resources (updated 2026-11-02).** Both environments are released.
 Production serves `https://whatrdp.com` from Worker `whatrdp-production` with D1
 `whatrdp-production` (migrations 0001–0006 verified remotely; `0006` applied
-2026-11-01). The public
+2026-11-01). The power-control migration `0007` is pending on both databases and
+must be applied before the release that includes the power controls. The public
 `*.workers.dev` route is disabled and the custom domain holds the TLS
 certificate. Staging serves
 `https://whatrdp-staging.cyberise2020.workers.dev`. Worker secrets
@@ -119,6 +120,12 @@ Migrations are **not automatically applied by CD**. The release job only reads
 the selected D1 migration ledger and stops when schema readiness cannot be verified
 or a migration is pending. Review and approve migrations separately, take a
 backup, and reconcile real orders before any remote change.
+
+`0007_power_control.sql` adds `orders.power_state`, `orders.power_checked_at` and
+the `power_actions` audit/throttle table. It is additive and nullable; apply it
+to staging and production before the release that includes the power controls.
+Rolling back the Worker alone leaves the table and columns in place, which is
+safe.
 
 The immutable baseline contains the historical gateway column. The additive
 second migration copies it to `payment_reference` and supplies USD currency.

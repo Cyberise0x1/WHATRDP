@@ -1,4 +1,5 @@
 import { raiseAlert } from "./alerts";
+import type { PowerAction } from "./power-actions";
 
 export interface CatalogPlan {
   sku: string;
@@ -337,11 +338,19 @@ export async function getCredentials(
   return response.data;
 }
 
-export async function powerAction(id: string, action: string): Promise<void> {
-  await api(`/servers/${encodeURIComponent(id)}/actions`, {
-    method: "POST",
-    body: JSON.stringify({ action }),
-  });
+export async function powerAction(
+  id: string,
+  action: PowerAction,
+  auth?: SupplierAuth,
+): Promise<void> {
+  await api(
+    `/servers/${encodeURIComponent(id)}/actions`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    },
+    { auth },
+  );
 }
 
 export async function deleteServer(id: string): Promise<void> {

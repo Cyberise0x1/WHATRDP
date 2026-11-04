@@ -16,7 +16,9 @@ Cyberise project.
   infrastructure provider. The legal pages refer to "our infrastructure
   provider" instead. Internal source, docs and history still name it.
 - Existing bearer-link orders can display service status and encrypted-at-rest
-  credentials. These links are secrets, not a replacement for customer accounts.
+  credentials. `ACTIVE` orders also expose live power controls (start, reboot,
+  graceful shutdown and force-off) with inline confirmation for disruptive
+  actions. These links are secrets, not a replacement for customer accounts.
 - Provider HMAC verification and authoritative service-status synchronization.
 - Conditional payment/provisioning claims, bounded read retries and review
   handling for ambiguous billable requests.

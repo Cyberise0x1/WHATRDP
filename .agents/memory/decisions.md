@@ -476,3 +476,35 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** production still requires the gated **Deploy production**
   workflow and explicit owner approval; never count a staging release as a
   production release.
+
+- **D-039 · 2026-11-04 · user (requested), CommandCode (delivery)** — The
+  customer order console gains live power controls for `ACTIVE` orders: start,
+  reboot, graceful shutdown and force-off, plus a manual status refresh. A new
+  `POST /api/orders/[token]/actions` endpoint accepts only those four actions
+  and calls the supplier's `POST /servers/{id}/actions`; non-`ACTIVE` orders are
+  refused. `?sync=1` on the read endpoint is the only way the panel asks for a
+  fresh supplier power state; the default read path stays local. This extends
+  D-022: the bearer link now grants control as well as read access. Delete,
+  reinstall, rescue, console, renew/cancel and password reset stay unexposed.
+  **Why:** the owner asked for parity with the provider's customer panel; the
+  supplier's `vps:write` scope already covers these power actions.
+  **How to apply:** keep the allowlist server-side, require inline confirmation
+  for reboot/shutdown/force-off, and never add a destructive or billable action
+  without a new review. Do not log tokens, credentials or supplier action
+  bodies.
+
+- **D-040 · 2026-11-04 · CommandCode** — Power controls are hardened before
+  release: `0007_power_control.sql` adds nullable `orders.power_state` and
+  `orders.power_checked_at` plus a `power_actions` audit table. One accepted
+  action per order is claimed by a single atomic D1 insert per 10-second window
+  before the supplier call; the row records `requested`/`sent`/`rejected`/
+  `failed`/`server_missing`/`rate_limited` and never credentials. `?sync=1`
+  returns the cached power state when `power_checked_at` is under 10 seconds old,
+  so a panel load costs at most one supplier `GET` per order per window.
+  **Why:** a bearer link should not be able to hammer the supplier, and operators
+  need a durable record of who did what to which server; the cache also bounds
+  panel-driven supplier reads as traffic grows.
+  **How to apply:** apply migration 0007 to staging and production before the
+  release that includes power controls; never bypass the D1 claim for a supplier
+  power call, and keep audit rows free of tokens, credentials and customer
+  contact data.

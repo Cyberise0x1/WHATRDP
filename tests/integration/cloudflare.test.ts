@@ -102,6 +102,20 @@ function options() {
             data: { user: "Administrator", password: "fixture-server-password" },
           });
         }
+        if (url.pathname.endsWith("/servers/srv_power/actions")) {
+          const { action } = (await request.json()) as { action: string };
+          assert.ok(["start", "reboot", "shutdown", "stop"].includes(action));
+          return Response.json({ data: { id: "srv_power", action, ok: true } });
+        }
+        if (url.pathname.endsWith("/servers/srv_power"))
+          return Response.json({
+            data: {
+              id: "srv_power",
+              status: "ACTIVE",
+              power: "RUNNING",
+              ips: [{ address: "192.0.2.11", primary: true }],
+            },
+          });
         if (url.pathname.endsWith("/servers/srv_fixture"))
           return Response.json({
             data: {
@@ -212,6 +226,7 @@ before(
 
 beforeEach(async () => {
   await sql("DELETE FROM orders", [], "run");
+  await sql("DELETE FROM power_actions", [], "run");
   externalCalls = [];
 });
 after(async () => {
@@ -363,6 +378,112 @@ test("a ready order with credentials is served without touching email egress", a
   assert.equal(body.data.credentials.user, "Administrator");
   assert.equal(body.data.credentials.password, "fixture-password");
   assert.deepEqual(externalCalls, [], "no email binding exists in the fixture");
+});
+
+test("the packaged Worker exposes allowlisted power actions only for active orders", async () => {
+  const order = await makeOrder();
+  await repo.update(order.id, {
+    status: "ACTIVE",
+    service_id: "srv_power",
+    primary_ip: "192.0.2.11",
+    username: "Administrator",
+    password_enc: encryptSecret("fixture-password"),
+  });
+
+  const unsupported = await mf.dispatchFetch(
+    `https://fixture.test/api/orders/${order.token}/actions`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "delete" }),
+    },
+  );
+  assert.equal(unsupported.status, 400);
+  assert.equal(
+    externalCalls.some((call) => call.includes("srv_power")),
+    false,
+    "an unsupported action must not reach the supplier",
+  );
+
+  const refresh = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}?sync=1`);
+  assert.equal(refresh.status, 200);
+  const refreshed = (await refresh.json()) as { data: { power: string } };
+  assert.equal(refreshed.data.power, "RUNNING");
+
+  const supplierGets = () =>
+    externalCalls.filter((call) => call === "GET dashboard.rdp.monster/api/v1/servers/srv_power")
+      .length;
+  const getsBeforeCachedRead = supplierGets();
+  const cached = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}?sync=1`);
+  assert.equal(cached.status, 200);
+  const cachedBody = (await cached.json()) as { data: { power: string } };
+  assert.equal(cachedBody.data.power, "RUNNING");
+  assert.equal(
+    supplierGets(),
+    getsBeforeCachedRead,
+    "a fresh panel read must use the cached power state",
+  );
+
+  const reboot = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}/actions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "reboot" }),
+  });
+  assert.equal(reboot.status, 200);
+  const payload = (await reboot.json()) as {
+    data: { status: string; power: string; credentials: { user: string } | null };
+  };
+  assert.equal(payload.data.status, "ACTIVE");
+  assert.equal(payload.data.power, "RUNNING");
+  assert.equal(payload.data.credentials?.user, "Administrator");
+  assert.ok(externalCalls.includes("POST dashboard.rdp.monster/api/v1/servers/srv_power/actions"));
+
+  const audit = await sql<{ results: { action: string; outcome: string }[] }>(
+    "SELECT action, outcome FROM power_actions WHERE order_id = ?",
+    [order.id],
+    "all",
+  );
+  assert.deepEqual(audit.results, [{ action: "reboot", outcome: "sent" }]);
+
+  const supplierActionPosts = () =>
+    externalCalls.filter(
+      (call) => call === "POST dashboard.rdp.monster/api/v1/servers/srv_power/actions",
+    ).length;
+  const postsBeforeLimited = supplierActionPosts();
+  const limited = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}/actions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "start" }),
+  });
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("retry-after"), "10");
+  assert.equal(
+    supplierActionPosts(),
+    postsBeforeLimited,
+    "the cooldown must stop the supplier call",
+  );
+
+  await sql(
+    "UPDATE power_actions SET created_at = ? WHERE order_id = ?",
+    [new Date(Date.now() - 15_000).toISOString(), order.id],
+    "run",
+  );
+  const started = await mf.dispatchFetch(`https://fixture.test/api/orders/${order.token}/actions`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "start" }),
+  });
+  assert.equal(started.status, 200);
+
+  const finalAudit = await sql<{ results: { action: string; outcome: string }[] }>(
+    "SELECT action, outcome FROM power_actions WHERE order_id = ? ORDER BY id",
+    [order.id],
+    "all",
+  );
+  assert.deepEqual(
+    finalAudit.results.map((row) => `${row.action}:${row.outcome}`),
+    ["reboot:sent", "start:sent"],
+  );
 });
 
 test("parallel provisioning claims make at most one supplier creation call", async () => {

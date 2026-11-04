@@ -13,9 +13,15 @@ order page no longer reveals credentials. Other supplier read failures remain
 retryable and never cancel an order.
 
 Order URLs are **bearer credentials**: anyone with a valid link can view that
-order and, once `ACTIVE`, its revealed server credentials. The owner accepted
-bearer links as the access model for the controlled pilot (D-022); customer
-accounts and ownership checks remain future hardening, not a current feature.
+order and, once `ACTIVE`, its revealed server credentials and power controls
+(start, reboot, graceful shutdown and force-off). The owner accepted bearer
+links as the access model for the controlled pilot (D-022, extended by D-039);
+customer accounts and ownership checks remain future hardening, not a current
+feature. Delete, reinstall, rescue, console access and password reset are not
+exposed through the order link. Power actions are rate-limited per order to one
+accepted request per 10 seconds and recorded in the `power_actions` audit table
+(order id, action, outcome and timestamps only; never credentials or tokens).
+Panel power reads are cached for 10 seconds to bound supplier API usage.
 Responses and pages are `private, no-store` with `no-referrer` and
 `X-Robots-Tag: noindex`, and order tokens must never be logged or shared.
 A per-IP checkout rate limit and Turnstile verification are deployed (D-023);

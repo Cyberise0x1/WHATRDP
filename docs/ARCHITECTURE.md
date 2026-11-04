@@ -63,9 +63,15 @@ Service binding. Orders whose credentials were stored by the read/webhook path
 are picked up by the same bounded cron, which retries at most three times at
 15-minute spacing; a delivery failure alerts but never changes order state.
 Every send is claimed in D1 first, so normal retries cannot duplicate an email.
-Order-status reads are read-only and never provision. A supplier `404` for a
-linked service is authoritative deletion: the order moves to `CANCELLED` and the
-stored IP, username and encrypted password are cleared. Other read failures stay
+Order-status reads are read-only and never provision. The order console also
+exposes an allowlisted power-action route (`POST /api/orders/[token]/actions`)
+that calls the supplier's server action endpoint only for `ACTIVE` orders.
+Power actions are claimed in D1 before the supplier call (one accepted action
+per order per 10 seconds) and recorded in `power_actions`; panel power reads are
+cached for 10 seconds through `orders.power_checked_at`. Unexpected or
+missing-service failures never retry automatically. A supplier
+`404` for a linked service is authoritative deletion: the order moves to
+`CANCELLED` and the stored IP, username and encrypted password are cleared. Other read failures stay
 retryable and never cancel an order. A bounded cron (`*/5 * * * *`)
 re-syncs stuck `PAID`/`PROVISIONING` orders, re-dispatches the Workflow for
 `PAID` only while provisioning is enabled, and marks an interrupted claim with no

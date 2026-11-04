@@ -23,6 +23,8 @@ export interface Order {
   email: string | null;
   service_id: string | null;
   primary_ip: string | null;
+  power_state: string | null;
+  power_checked_at: string | null;
   username: string | null;
   password_enc: string | null;
   credentials_emailed_at: string | null;

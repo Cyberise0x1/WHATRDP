@@ -1376,6 +1376,74 @@ select:focus-visible {
   line-height: 1.7;
 }
 
+.power-panel {
+  margin-top: 26px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.power-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.power-head h2 {
+  font-size: 24px;
+  text-transform: uppercase;
+}
+
+.power-state {
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.power-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.power-confirm {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--accent);
+  background: oklch(0.68 0.18 25 / 0.04);
+}
+
+.power-confirm p {
+  color: var(--ink-2);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.power-confirm .power-actions {
+  margin-top: 12px;
+}
+
+.power-message {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.power-message.error {
+  color: var(--danger);
+}
+
+.power-hint {
+  margin-top: 12px;
+  color: var(--faint);
+  font-size: 10px;
+  line-height: 1.7;
+}
+
 .session-note {
   margin-top: 22px;
   padding-left: 14px;

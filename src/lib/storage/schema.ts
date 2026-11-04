@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS orders (
   email TEXT,
   service_id TEXT,
   primary_ip TEXT,
+  power_state TEXT,
+  power_checked_at TEXT,
   username TEXT,
   password_enc TEXT,
   error TEXT,
@@ -34,6 +36,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   type TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS power_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_power_actions_order_created
+  ON power_actions(order_id, created_at DESC);
 CREATE TABLE IF NOT EXISTS backup_heartbeat (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   environment TEXT NOT NULL,
