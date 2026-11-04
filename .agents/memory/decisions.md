@@ -444,3 +444,18 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   code.
   **How to apply:** keep the redirect rule; if the apex hostname ever changes,
   update the rule target.
+
+- **D-037 · 2026-11-04 · user** — Customer-facing surfaces no longer name the
+  upstream infrastructure provider. WHATRDP is presented as an anonymous-first
+  service and a Cyberise project (`https://cyberise.org`); the legal pages refer
+  to “our infrastructure provider”. Added `/anonymous-vps`, a home privacy
+  section, and EU/US location plus Standard/High-performance catalogue controls.
+  **Why:** the owner wants the storefront positioned around anonymity and does
+  not want customers to identify the reseller relationship.
+  **Consequence:** public copy, emails, public API errors and order errors are
+  provider-neutral; internal source, docs, tests and git history still name the
+  provider, so the public repository can reveal it. Legal entity/contact
+  placeholders remain, and generic recipient wording still needs counsel review.
+  **How to apply:** never add the provider name to customer-facing copy, email,
+  public API errors or order errors; keep operator alerts specific, and keep the
+  legal description generic unless counsel directs otherwise.

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatMoney } from "@/lib/pricing";
+import { LEGAL_LINKS } from "@/lib/legal";
+import { Emblem } from "./Emblem";
 
 interface OrderView {
   id: number;
@@ -21,15 +23,25 @@ const POLLABLE = new Set(["PAID", "PROVISIONING"]);
 
 const LABELS: Record<string, string> = {
   PENDING_PAYMENT: "Awaiting payment",
-  PAID: "Payment received",
-  PROVISIONING: "Installing your server",
-  ACTIVE: "Ready",
+  PAID: "Payment confirmed",
+  PROVISIONING: "Provisioning",
+  ACTIVE: "Connected",
   FAILED: "Provisioning failed",
   REVIEW_REQUIRED: "Support review required",
   CANCELLED: "Cancelled",
 };
 
-export function OrderStatus({ token }: { token: string }) {
+const STATUS_CODES: Record<string, string> = {
+  PENDING_PAYMENT: "WAITING",
+  PAID: "PAID",
+  PROVISIONING: "PROVISIONING",
+  ACTIVE: "LIVE",
+  FAILED: "FAILED",
+  REVIEW_REQUIRED: "REVIEW",
+  CANCELLED: "CANCELLED",
+};
+
+export function OrderConsole({ token }: { token: string }) {
   const [order, setOrder] = useState<OrderView | null>(null);
   const [missing, setMissing] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
@@ -66,68 +78,86 @@ export function OrderStatus({ token }: { token: string }) {
 
   if (missing) {
     return (
-      <section className="order">
-        <div className="notice error">
-          <h1>Order not found</h1>
-          <p>This link is invalid or the order no longer exists.</p>
-        </div>
+      <section className="order-message error">
+        <p className="session-id">SESSION NOT FOUND</p>
+        <h1>No session.</h1>
+        <p>This link is invalid or the order no longer exists. Check the link and try again.</p>
+        <p>
+          <a className="button ghost" href="/">
+            RETURN TO CATALOGUE
+          </a>
+        </p>
       </section>
     );
   }
 
   if (!order) {
     return (
-      <section className="order">
-        <p className="muted">Loading order…</p>
+      <section className="order-message">
+        <p className="session-id">WHATRDP://CONNECT</p>
+        <h1>Establishing session…</h1>
+        <p>
+          Reading the order record <span className="terminal-cursor" aria-hidden="true" />
+        </p>
       </section>
     );
   }
 
-  return (
-    <section className="order">
-      <p className="eyebrow">Order #{order.id}</p>
-      <h1>{LABELS[order.status] ?? order.status}</h1>
+  const currentIndex = ["PAID", "PROVISIONING", "ACTIVE"].indexOf(order.status);
+  const live = POLLABLE.has(order.status) || order.status === "ACTIVE";
 
-      <div className="status-track">
-        {["PAID", "PROVISIONING", "ACTIVE"].map((step, index) => {
-          const currentIndex = ["PAID", "PROVISIONING", "ACTIVE"].indexOf(order.status);
-          return (
-            <span
-              key={step}
-              className={index <= currentIndex ? "dot done" : "dot"}
-              aria-label={step}
-            />
-          );
-        })}
+  return (
+    <section className="order-console">
+      <Emblem className="order-emblem" />
+
+      <div className="order-head">
+        <div>
+          <p className="session-id">
+            SESSION #{order.id} // {order.plan}
+          </p>
+          <h1 aria-live="polite">{LABELS[order.status] ?? order.status}</h1>
+        </div>
+        <span className="session-status">
+          <span className={live ? "status-dot live" : "status-dot"} aria-hidden="true" />
+          {STATUS_CODES[order.status] ?? order.status}
+        </span>
       </div>
 
-      {order.status === "PROVISIONING" || order.status === "PAID" ? (
-        <p className="muted">
-          Your server is being created and installed. This page updates on its own — usually under a
-          minute.
-        </p>
-      ) : null}
+      <div className="status-track">
+        {["PAID", "PROVISIONING", "ACTIVE"].map((step, index) => (
+          <span
+            key={step}
+            className={index <= currentIndex ? "dot done" : "dot"}
+            aria-label={step}
+          />
+        ))}
+      </div>
+      <div className="status-track-labels" aria-hidden="true">
+        <span>PAID</span>
+        <span>PROVISIONING</span>
+        <span>CONNECTED</span>
+      </div>
 
-      {order.error ? <div className="notice error compact">{order.error}</div> : null}
-
-      <dl className="order-grid">
-        <div>
+      <dl className="order-manifest">
+        <div className="manifest-item">
           <dt>Plan</dt>
           <dd>{order.plan}</dd>
         </div>
-        <div>
+        <div className="manifest-item">
           <dt>Operating system</dt>
           <dd>{order.os}</dd>
         </div>
-        <div>
+        <div className="manifest-item">
           <dt>Term</dt>
           <dd>{order.cycle}</dd>
         </div>
-        <div>
+        <div className="manifest-item">
           <dt>Paid</dt>
           <dd>{formatMoney(order.amountMinor ?? order.amountCents, order.currency ?? "USD")}</dd>
         </div>
       </dl>
+
+      {order.error ? <div className="session-alert">{order.error}</div> : null}
 
       {order.credentials ? (
         <div className="credentials">
@@ -140,8 +170,9 @@ export function OrderStatus({ token }: { token: string }) {
               type="button"
               className="button ghost small"
               onClick={() => copy(order.ip ?? "", "ip")}
+              aria-label="Copy IP address"
             >
-              {copied === "ip" ? "Copied" : "Copy"}
+              {copied === "ip" ? "COPIED" : "COPY"}
             </button>
           </div>
 
@@ -152,8 +183,9 @@ export function OrderStatus({ token }: { token: string }) {
               type="button"
               className="button ghost small"
               onClick={() => copy(order.credentials!.user, "user")}
+              aria-label="Copy username"
             >
-              {copied === "user" ? "Copied" : "Copy"}
+              {copied === "user" ? "COPIED" : "COPY"}
             </button>
           </div>
 
@@ -164,18 +196,27 @@ export function OrderStatus({ token }: { token: string }) {
               type="button"
               className="button ghost small"
               onClick={() => copy(order.credentials!.password, "pass")}
+              aria-label="Copy password"
             >
-              {copied === "pass" ? "Copied" : "Copy"}
+              {copied === "pass" ? "COPIED" : "COPY"}
             </button>
           </div>
-
-          <p className="muted small">
-            Bookmark this page — we also email these details to the address used at checkout. Treat
-            this link as a password: anyone who has it can view these credentials. We can reset the
-            password at any time on request.
-          </p>
         </div>
       ) : null}
+
+      <p className="session-note">
+        Bookmark this page. We also email these details to the address used at checkout.{" "}
+        <strong>Treat this link as a password:</strong> anyone who has it can view these
+        credentials. We can reset the password at any time on request.
+      </p>
+
+      <div className="session-legal">
+        {LEGAL_LINKS.map((link) => (
+          <a key={link.href} href={link.href} target="_blank" rel="noopener noreferrer">
+            {link.label}
+          </a>
+        ))}
+      </div>
     </section>
   );
 }

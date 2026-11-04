@@ -1,31 +1,40 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Handjet, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { checkoutEnabled } from "@/lib/checkout-policy";
+
+const display = Handjet({
+  subsets: ["latin"],
+  variable: "--font-display-family",
+  display: "swap",
+});
+
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-mono-family",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "Cloud servers — instant delivery",
+  title: "WHATRDP — Anonymous remote desktops, provisioned.",
   description:
-    "Windows RDP and Linux VPS provisioned in seconds. Full admin access, NVMe storage, EU and US locations.",
+    "Anonymous Windows RDP and Linux VPS with full administrator access. No KYC, no account, email-only delivery, crypto checkout in USD, EU + US.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#14110e",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${mono.variable}`}>
       <body>
-        <header className="site-header">
-          <a className="brand" href="/">
-            <span className="brand-mark">◆</span>
-            <span>NodeForge</span>
-          </a>
-          <nav>
-            <a href="#plans">Plans</a>
-            <a href="#faq">FAQ</a>
-          </nav>
-        </header>
+        <SiteHeader checkoutOpen={checkoutEnabled()} />
         <main>{children}</main>
-        <footer className="site-footer">
-          <span>© {new Date().getFullYear()} NodeForge</span>
-          <span>Instant provisioning · Full admin access · EU &amp; US</span>
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   );

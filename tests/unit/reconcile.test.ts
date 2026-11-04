@@ -194,7 +194,7 @@ test("a missing supplier service is cancelled and clears stored credentials", as
   assert.equal(stored?.primary_ip, null);
   assert.equal(stored?.username, null);
   assert.equal(stored?.password_enc, null);
-  assert.match(stored?.error ?? "", /no longer has this server/i);
+  assert.match(stored?.error ?? "", /no longer available/i);
 });
 
 test("each run is bounded by the limit", async () => {

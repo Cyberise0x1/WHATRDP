@@ -154,7 +154,7 @@ export async function createOrderCheckout(
 
   const supplierCost = plan.cost[input.cycle];
   if (typeof supplierCost !== "number" || supplierCost <= 0) {
-    throw new CheckoutError("Supplier pricing is unavailable", 503, "supplier_cost_unavailable");
+    throw new CheckoutError("Pricing is temporarily unavailable", 503, "supplier_cost_unavailable");
   }
 
   // Fail closed when the live balance cannot be verified: never take money for
@@ -173,7 +173,7 @@ export async function createOrderCheckout(
       });
     }
     throw new CheckoutError(
-      "Sales are paused while supplier capacity is verified. No payment was taken.",
+      "Sales are paused while capacity is verified. No payment was taken.",
       503,
       "supplier_balance_unavailable",
     );
@@ -190,7 +190,7 @@ export async function createOrderCheckout(
       context: { requiredCents, availableCents: account.balanceCents },
     });
     throw new CheckoutError(
-      "Sales are temporarily paused while supplier capacity is replenished. No payment was taken.",
+      "Sales are temporarily paused while capacity is replenished. No payment was taken.",
       503,
       "insufficient_supplier_balance",
     );

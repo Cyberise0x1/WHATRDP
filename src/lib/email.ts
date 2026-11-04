@@ -71,6 +71,15 @@ export function renderCredentialsEmail(
     "Connect with Remote Desktop (mstsc) using the details above.",
     "Treat the order link as a password: anyone who has it can view these credentials.",
     "We can reset the password at any time on request.",
+    ...(base
+      ? [
+          "",
+          `Terms: ${base}/terms`,
+          `Refund policy: ${base}/refund`,
+          `Privacy: ${base}/privacy`,
+          `Acceptable use: ${base}/acceptable-use`,
+        ]
+      : []),
     "",
     "WHATRDP",
   ].join("\n");
@@ -94,6 +103,14 @@ export function renderCredentialsEmail(
     "<p>Connect with Remote Desktop (mstsc) using the details above.</p>",
     "<p>Treat the order link as a password: anyone who has it can view these credentials. " +
       "We can reset the password at any time on request.</p>",
+    ...(base
+      ? [
+          `<p><a href="${escapeHtml(`${base}/terms`)}">Terms</a> · ` +
+            `<a href="${escapeHtml(`${base}/refund`)}">Refund policy</a> · ` +
+            `<a href="${escapeHtml(`${base}/privacy`)}">Privacy</a> · ` +
+            `<a href="${escapeHtml(`${base}/acceptable-use`)}">Acceptable use</a></p>`,
+        ]
+      : []),
     "<p>WHATRDP</p>",
   ].join("\n");
 

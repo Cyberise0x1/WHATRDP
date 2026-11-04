@@ -34,10 +34,16 @@ export async function GET() {
         message: "The catalogue could not be assembled",
       });
     }
+    console.error(
+      JSON.stringify({
+        event: "catalog_unavailable",
+        message: error instanceof Error ? error.message : "Unknown error",
+      }),
+    );
     return NextResponse.json(
       {
         error: "catalog_unavailable",
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: "The catalogue is temporarily unavailable",
       },
       { status: 502 },
     );

@@ -2,13 +2,19 @@
 
 ## Purpose and audience
 
-Resell RDP.monster remote-server inventory to Nigerian and international
-customers through an in-house storefront. The provider supplies and operates the
-servers; our business handles pricing, payments, support and customer records.
+Sell remote-server capacity to Nigerian and international customers through an
+in-house storefront. The upstream infrastructure provider supplies and operates
+the servers; our business handles pricing, payments, support and customer
+records. Public positioning is anonymous-first, and WHATRDP is presented as a
+Cyberise project.
 
 ## Current behavior
 
-- Server-rendered provider catalogue with term and OS selectors and USD pricing.
+- Server-rendered live inventory with location, class, term and OS selectors and
+  USD pricing.
+- Public pages, emails and customer-facing errors do not name the upstream
+  infrastructure provider. The legal pages refer to "our infrastructure
+  provider" instead. Internal source, docs and history still name it.
 - Existing bearer-link orders can display service status and encrypted-at-rest
   credentials. These links are secrets, not a replacement for customer accounts.
 - Provider HMAC verification and authoritative service-status synchronization.
@@ -34,8 +40,13 @@ servers; our business handles pricing, payments, support and customer records.
 - Customer accounts and ownership checks beyond the accepted bearer-link
   model (D-022), and restricted support/admin tools.
 - Durable outbox/background fulfilment, recovery and shared supplier rate limits.
-- Explicit renewal, cancellation, partial-payment, refund and dispute policies.
-- Invoices, transaction records, support, privacy, terms and abuse procedures.
+- Explicit renewal and cancellation policies. Refund and partial-payment
+  positions are drafted in the legal pages; renewal and cancellation are still
+  handled manually.
+- Privacy, terms, refund and acceptable-use pages are drafted under
+  `src/app/(legal)`. Entity/contact placeholders and legal review are still
+  required before publication. Invoices, transaction records, support and dispute
+  handling remain unimplemented.
 
 Before enabling sales, verify merchant/provider eligibility, current supplier
 products and balance, pricing/margin/FX policy, operating reserves, licences,

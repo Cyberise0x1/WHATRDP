@@ -8,8 +8,10 @@ for production storage. The actual servers remain with RDP.monster.
 are implemented and enabled in both environments after one staging order was
 verified end to end (D-032); production was released on 2026-11-02 (D-033).
 Production changes only through the gated `Deploy production` workflow.
-Customer accounts, legal pages, refunds and dispute handling remain out of scope
-for the pilot.
+Customer accounts, refunds and dispute handling remain out of scope for the
+pilot. Legal pages are drafted under `src/app/(legal)`, but they contain
+entity/contact placeholders and must not be published until those are replaced
+and the copy is reviewed.
 
 ## Local development
 
@@ -88,5 +90,6 @@ published as part of this cleanup.
 - [Security boundaries](docs/SECURITY.md)
 - [Operational monitoring and alerts](docs/MONITORING.md)
 - [Deployment, migrations and rollback](docs/DEPLOYMENT.md)
+- [Legal pages and go-live checklist](docs/LEGAL.md)
 - [Cleanup inventory](docs/REPOSITORY-CLEANUP.md)
 - [Historical decisions](.agents/memory/decisions.md)

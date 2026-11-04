@@ -5,6 +5,7 @@ import { raiseAlert } from "./alerts";
 export interface CreateFailure {
   certainRejection: boolean;
   message: string;
+  customerMessage: string;
 }
 
 /** Shared by the inline Node path and the provisioning Workflow. */
@@ -24,6 +25,12 @@ export function classifyCreateFailure(error: unknown): CreateFailure {
         : certainRejection
           ? "Supplier rejected this order. Contact support."
           : "Supplier creation outcome is uncertain. Support must reconcile before any retry.",
+    customerMessage:
+      status === 402
+        ? "This order cannot be provisioned right now. Support must review it."
+        : certainRejection
+          ? "This order was rejected. Contact support."
+          : "Provisioning is under review. Contact support before retrying.",
   };
 }
 
@@ -53,7 +60,7 @@ export async function runProvisioning(
     });
     return store.update(id, {
       status: failure.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
-      error: failure.message,
+      error: failure.customerMessage,
     });
   }
 }

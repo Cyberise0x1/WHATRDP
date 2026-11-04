@@ -38,7 +38,7 @@ export async function syncOrder(order: Order, force = false): Promise<Order> {
         primary_ip: null,
         username: null,
         password_enc: null,
-        error: "The provider no longer has this server. It was cancelled or removed.",
+        error: "This server is no longer available. It was cancelled or removed.",
       });
     }
     const message = "Status check failed. Contact support if this persists.";

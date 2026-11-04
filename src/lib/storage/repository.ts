@@ -138,7 +138,7 @@ export class OrderRepository {
   claimProvision(id: number) {
     return this.db
       .prepare(
-        `UPDATE orders SET status = 'PROVISIONING', error = 'Creation started; awaiting provider confirmation', updated_at = ?
+        `UPDATE orders SET status = 'PROVISIONING', error = 'Creation started; awaiting confirmation', updated_at = ?
        WHERE id = ? AND status = 'PAID' AND service_id IS NULL RETURNING *`,
       )
       .bind(new Date().toISOString(), id)

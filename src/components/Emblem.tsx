@@ -1,0 +1,41 @@
+export function Emblem({ className, title }: { className?: string; title?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 96 96"
+      xmlns="http://www.w3.org/2000/svg"
+      role={title ? "img" : undefined}
+      aria-hidden={title ? undefined : true}
+      focusable="false"
+    >
+      {title ? <title>{title}</title> : null}
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M24 63c-8.3 0-15-6.4-15-14.3 0-6.5 4.6-12 11.1-13.5C21.8 26 29.7 19 39.3 19c8 0 14.8 4.6 18.2 11.3 2.8-1.6 6-2.5 9.5-2.5 9.9 0 18 7.5 18 16.8 0 1.5-.2 2.9-.6 4.2C89 50.6 92 55.3 92 60.7 92 68 86.2 74 79 74" />
+        <path d="M24 63c-4.8 0-8.8-3.1-8.8-7.1" />
+        <path d="M30 74h42" />
+        <path d="M38 45v-7a10 10 0 0 1 20 0v7" />
+        <rect x="34" y="45" width="28" height="21" rx="3" />
+        <circle cx="48" cy="53" r="3" />
+        <path d="M48 56v5" />
+        <path d="M9 52h9" />
+        <circle cx="7" cy="52" r="1.6" />
+        <path d="M78 52h9" />
+        <circle cx="89" cy="52" r="1.6" />
+        <path d="M16 52v-9" />
+        <circle cx="16" cy="41" r="1.6" />
+        <path d="M80 52v-9" />
+        <circle cx="80" cy="41" r="1.6" />
+        <path d="M16 52v8" />
+        <circle cx="16" cy="62" r="1.6" />
+        <path d="M80 52v8" />
+        <circle cx="80" cy="62" r="1.6" />
+      </g>
+    </svg>
+  );
+}

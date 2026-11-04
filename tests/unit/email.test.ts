@@ -213,5 +213,28 @@ test("the renderer always includes the order link when a base URL is configured"
   assert.match(message.text, /IP address: not reported yet/);
   assert.match(message.text, /Username: Administrator/);
   assert.match(message.text, /https:\/\/whatrdp\.com\/order\/token_fixture/);
+  assert.match(message.text, /https:\/\/whatrdp\.com\/terms/);
+  assert.match(message.text, /https:\/\/whatrdp\.com\/refund/);
+  assert.match(message.text, /https:\/\/whatrdp\.com\/privacy/);
+  assert.match(message.text, /https:\/\/whatrdp\.com\/acceptable-use/);
+  assert.match(message.html ?? "", /href="https:\/\/whatrdp\.com\/terms"/);
+  assert.match(message.html ?? "", /href="https:\/\/whatrdp\.com\/acceptable-use"/);
   assert.equal(message.subject, "Your WHATRDP server is ready (#9)");
+});
+
+test("the renderer omits policy links when no public base URL is configured", () => {
+  const order = {
+    id: 10,
+    token: "token_fixture",
+    plan_sku: "usa/2",
+    os: "ubuntu-24-04",
+    cycle: "ANNUALLY",
+    primary_ip: null,
+    username: null,
+  } as unknown as Order;
+  const message = renderCredentialsEmail(order, "pw");
+  assert.doesNotMatch(message.text, /\/terms/);
+  assert.doesNotMatch(message.text, /\/refund/);
+  assert.doesNotMatch(message.html ?? "", /\/terms/);
+  assert.doesNotMatch(message.html ?? "", /\/acceptable-use/);
 });

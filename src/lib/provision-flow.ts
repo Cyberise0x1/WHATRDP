@@ -103,7 +103,7 @@ export async function runProvisionFlow(
     await step.do("record creation failure", SAFE_RETRY, () =>
       repo.update(claimed.id, {
         status: created.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
-        error: created.message,
+        error: created.customerMessage,
       }),
     );
     return created.certainRejection ? "failed" : "review_required";

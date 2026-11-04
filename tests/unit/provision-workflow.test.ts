@@ -222,7 +222,7 @@ test("an uncertain outcome requires review and is never retried", async () => {
   assert.equal(creates, 1);
   const stored = await repo.byId(order.id);
   assert.equal(stored?.status, "REVIEW_REQUIRED");
-  assert.match(stored?.error ?? "", /uncertain/i);
+  assert.match(stored?.error ?? "", /under review/i);
 });
 
 test("insufficient supplier credit is reported as a failed order", async () => {
@@ -240,7 +240,7 @@ test("insufficient supplier credit is reported as a failed order", async () => {
   assert.equal(result, "failed");
   const stored = await repo.byId(order.id);
   assert.equal(stored?.status, "FAILED");
-  assert.match(stored?.error ?? "", /credit is insufficient/i);
+  assert.match(stored?.error ?? "", /cannot be provisioned/i);
 });
 
 test("a server still provisioning is left for reconciliation and stores no credentials", async () => {

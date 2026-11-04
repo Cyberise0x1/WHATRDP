@@ -163,7 +163,7 @@ export async function reconcileOrders(
           primary_ip: null,
           username: null,
           password_enc: null,
-          error: "The provider no longer has this server. It was cancelled or removed.",
+          error: "This server is no longer available. It was cancelled or removed.",
         });
         result.synced += 1;
         continue;
