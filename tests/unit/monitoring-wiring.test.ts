@@ -130,7 +130,12 @@ test("provisioning rejections and uncertainty raise distinct alerts", async () =
       const [alert] = operationalAlerts(captured.lines);
       assert.equal(alert.code, expected);
       assert.equal(alert.severity, "critical");
-      assert.deepEqual(alert.context, { orderId: 7, certainRejection: status === 400 });
+      assert.deepEqual(alert.context, {
+        orderId: 7,
+        certainRejection: status === 400,
+        supplierStatus: status,
+        supplierCode: "unknown",
+      });
     } finally {
       captured.restore();
     }

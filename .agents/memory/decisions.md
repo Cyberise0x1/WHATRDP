@@ -529,3 +529,35 @@ Format: `- **D-00N · YYYY-MM-DD · <decider>** — <decision>. <why / consequen
   **How to apply:** verify the first `ACTIVE` production order shows the power
   panel; keep 0007 applied and never bypass the reviewer gate on future
   releases.
+
+- **D-042 · 2026-11-04 · CommandCode** — Checkout preflights supplier capacity
+  before persisting an order: a documented non-billable `POST /servers` quote
+  with `dryRun: true` and `requireCapacity: true` must succeed, or checkout
+  fails closed with 503 `plan_unavailable` — no order row, no gateway call and
+  no payment. The operator alert `checkout_blocked_supplier_capacity` carries
+  the SKU, OS, cycle and the supplier's status/code (never customer data);
+  `409 out_of_stock` is a warning, any other quote failure is critical.
+  Motivated by production order 3: a verified $15.99 payment for `europe/1`
+  could not be provisioned because the supplier returned `409 out_of_stock`,
+  which the storefront kept selling.
+  **Why:** taking money for capacity the supplier does not have is worse than
+  refusing the sale; D-021 checks balance but not stock.
+  **How to apply:** keep the quote before `createOrder` and the gateway call,
+  and before any persistence; treat a repeated `out_of_stock` as a signal to
+  hide or reprice the affected plans, and never retry the quote as if it were
+  transient.
+
+- **D-043 · 2026-11-04 · CommandCode** — Operator alerts for provisioning and
+  server power actions now carry the platform's technical rejection details:
+  `provisioning_failed`/`provisioning_review_required` include
+  `supplierStatus` and `supplierCode`, and a new `power_action_failed` alert
+  (warning for expected rejections, critical otherwise) includes the order id,
+  action, outcome, status and code. Alert messages are WHATRDP-branded ("A
+  WHATRDP server …") and never name the upstream provider (D-037); these alerts
+  go only to the operator channel, never to customers.
+  **Why:** order 3 was undiagnosable from alerts alone — the supplier's
+  `409 out_of_stock` was dropped, and the order 4 reboot failure carried no
+  error at all.
+  **How to apply:** keep alert context scalar and credential-free, keep
+  customer-facing order errors generic, and use the recorded codes when
+  reconciling with the platform.

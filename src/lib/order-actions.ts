@@ -2,6 +2,7 @@ import { cancelMissingOrder, refreshOrderState, SERVER_GONE_MESSAGE } from "./or
 import { isPowerAction, POWER_ACTION_COOLDOWN_MS } from "./power-actions";
 import { ApiError, isMissingServerError, powerAction } from "./rdpmonster";
 import { claimPowerAction, finishPowerAction, getOrderByToken } from "./store";
+import { raiseAlert } from "./alerts";
 import type { Order } from "./storage/types";
 
 export type PowerActionResult =
@@ -55,12 +56,28 @@ export async function performPowerAction(
     }
   };
 
+  // Operator-only, WHATRDP-branded: carries the platform's status/code so the
+  // next incident is self-explanatory. Never customer data.
+  const alertFailure = (
+    outcome: string,
+    severity: "warning" | "critical",
+    supplierStatus: number,
+    supplierCode: string,
+  ) =>
+    raiseAlert({
+      code: "power_action_failed",
+      severity,
+      message: "A WHATRDP server power action failed",
+      context: { orderId: order.id, action, outcome, supplierStatus, supplierCode },
+    });
+
   try {
     await powerAction(order.service_id, action);
   } catch (error) {
     if (isMissingServerError(error)) {
       await cancelMissingOrder(order.id);
       await record("server_missing");
+      alertFailure("server_missing", "warning", 404, "not_found");
       return {
         ok: false,
         status: 409,
@@ -70,6 +87,7 @@ export async function performPowerAction(
     }
     if (error instanceof ApiError && error.status === 409) {
       await record("rejected");
+      alertFailure("rejected", "warning", 409, error.code || "unknown");
       return {
         ok: false,
         status: 409,
@@ -79,6 +97,7 @@ export async function performPowerAction(
     }
     if (error instanceof ApiError && error.status === 429) {
       await record("rate_limited");
+      alertFailure("rate_limited", "warning", 429, error.code || "unknown");
       return {
         ok: false,
         status: 429,
@@ -88,6 +107,12 @@ export async function performPowerAction(
       };
     }
     await record("failed");
+    alertFailure(
+      "failed",
+      "critical",
+      error instanceof ApiError ? error.status : 0,
+      error instanceof ApiError ? error.code || "unknown" : "unreachable",
+    );
     return {
       ok: false,
       status: 502,

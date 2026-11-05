@@ -98,7 +98,12 @@ export async function runProvisionFlow(
       code: created.certainRejection ? "provisioning_failed" : "provisioning_review_required",
       severity: "critical",
       message: created.message,
-      context: { orderId: claimed.id, certainRejection: created.certainRejection },
+      context: {
+        orderId: claimed.id,
+        certainRejection: created.certainRejection,
+        supplierStatus: created.supplierStatus,
+        supplierCode: created.supplierCode,
+      },
     });
     await step.do("record creation failure", SAFE_RETRY, () =>
       repo.update(claimed.id, {
@@ -159,7 +164,7 @@ export async function runProvisionFlow(
     raiseAlert({
       code: "provisioning_failed",
       severity: "critical",
-      message: "The supplier reported a terminal failure while provisioning",
+      message: "A WHATRDP server reported a terminal failure during activation",
       context: { orderId: current.id, status: current.status },
     });
   }

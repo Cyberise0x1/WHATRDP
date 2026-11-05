@@ -49,38 +49,40 @@ keys and masks email addresses and `rdpm_`/`sk_`/`whsec_`-style values.
 
 ## Events
 
-| Code                                | Severity | Raised when                                                             |
-| ----------------------------------- | -------- | ----------------------------------------------------------------------- |
-| `supplier_token_missing`            | critical | `RDP_MONSTER_API_TOKEN` is not configured                               |
-| `supplier_unreachable`              | critical | supplier request timed out or the connection failed                     |
-| `supplier_auth_failed`              | critical | supplier returned `401` or `403` (dead/revoked token)                   |
-| `supplier_balance_exhausted`        | critical | supplier returned `402` or `insufficient_balance`                       |
-| `supplier_5xx`                      | warning  | supplier returned `5xx` after read retries                              |
-| `catalog_unavailable`               | warning  | catalogue assembly failed for a non-supplier reason                     |
-| `checkout_failed`                   | critical | checkout failed unexpectedly                                            |
-| `checkout_blocked_supplier_balance` | critical | live balance is below the plan cost plus `SUPPLIER_RESERVE_CENTS`       |
-| `supplier_balance_unavailable`      | critical | the supplier account payload could not be read                          |
-| `gateway_not_configured`            | critical | `ZENO_API_KEY` is missing                                               |
-| `gateway_unreachable`               | critical | Zeno could not be reached                                               |
-| `gateway_checkout_failed`           | critical | Zeno rejected checkout creation                                         |
-| `provisioning_failed`               | critical | definite supplier rejection, `402`, or a terminal supplier failure      |
-| `provisioning_review_required`      | critical | uncertain create outcome or an interrupted claim needs a human          |
-| `provision_dispatch_failed`         | critical | the Workflow could not be dispatched for a paid order                   |
-| `reconcile_sync_failed`             | warning  | an order could not be re-synced (at most hourly)                        |
-| `webhook_secret_missing`            | critical | a webhook signing secret is not configured                              |
-| `webhook_invalid_payload`           | warning  | a verified webhook body was malformed                                   |
-| `webhook_invalid_amount`            | warning  | a verified payment carried an invalid amount                            |
-| `payment_unmatched`                 | critical | a verified payment matched no order                                     |
-| `payment_mismatch`                  | critical | a verified payment did not match the order amount or currency           |
-| `zeno_webhook_failed`               | critical | a verified Zeno webhook could not be processed                          |
-| `supplier_webhook_unmatched`        | warning  | a verified supplier webhook referenced an unknown service               |
-| `supplier_webhook_failed`           | critical | a verified supplier webhook could not be processed                      |
-| `supplier_payment_failed`           | critical | the supplier reported a failed payment                                  |
-| `email_not_configured`              | critical | a ready server needs its credentials emailed but Email Service is unset |
-| `credentials_email_failed`          | warning  | a credential email attempt failed and will be retried                   |
-| `credentials_email_exhausted`       | critical | all three credential-email attempts failed; send manually               |
-| `backup_stale`                      | critical | no heartbeat, or the latest verified backup is older than 26 h          |
-| `backup_freshness_unavailable`      | critical | the heartbeat table could not be read (at most every six hours)         |
+| Code                                 | Severity           | Raised when                                                                                                            |
+| ------------------------------------ | ------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `supplier_token_missing`             | critical           | `RDP_MONSTER_API_TOKEN` is not configured                                                                              |
+| `supplier_unreachable`               | critical           | supplier request timed out or the connection failed                                                                    |
+| `supplier_auth_failed`               | critical           | supplier returned `401` or `403` (dead/revoked token)                                                                  |
+| `supplier_balance_exhausted`         | critical           | supplier returned `402` or `insufficient_balance`                                                                      |
+| `supplier_5xx`                       | warning            | supplier returned `5xx` after read retries                                                                             |
+| `catalog_unavailable`                | warning            | catalogue assembly failed for a non-supplier reason                                                                    |
+| `checkout_failed`                    | critical           | checkout failed unexpectedly                                                                                           |
+| `checkout_blocked_supplier_balance`  | critical           | live balance is below the plan cost plus `SUPPLIER_RESERVE_CENTS`                                                      |
+| `checkout_blocked_supplier_capacity` | warning / critical | the non-billable capacity quote rejected the plan (e.g. `409 out_of_stock`) or failed                                  |
+| `supplier_balance_unavailable`       | critical           | the supplier account payload could not be read                                                                         |
+| `gateway_not_configured`             | critical           | `ZENO_API_KEY` is missing                                                                                              |
+| `gateway_unreachable`                | critical           | Zeno could not be reached                                                                                              |
+| `gateway_checkout_failed`            | critical           | Zeno rejected checkout creation                                                                                        |
+| `provisioning_failed`                | critical           | a WHATRDP server could not be created: definite rejection, 402 or terminal failure (platform status and code included) |
+| `provisioning_review_required`       | critical           | uncertain create outcome or an interrupted claim needs a human                                                         |
+| `provision_dispatch_failed`          | critical           | the Workflow could not be dispatched for a paid order                                                                  |
+| `reconcile_sync_failed`              | warning            | an order could not be re-synced (at most hourly)                                                                       |
+| `power_action_failed`                | warning / critical | a server power action failed at the platform (action, outcome, status and code included)                               |
+| `webhook_secret_missing`             | critical           | a webhook signing secret is not configured                                                                             |
+| `webhook_invalid_payload`            | warning            | a verified webhook body was malformed                                                                                  |
+| `webhook_invalid_amount`             | warning            | a verified payment carried an invalid amount                                                                           |
+| `payment_unmatched`                  | critical           | a verified payment matched no order                                                                                    |
+| `payment_mismatch`                   | critical           | a verified payment did not match the order amount or currency                                                          |
+| `zeno_webhook_failed`                | critical           | a verified Zeno webhook could not be processed                                                                         |
+| `supplier_webhook_unmatched`         | warning            | a verified supplier webhook referenced an unknown service                                                              |
+| `supplier_webhook_failed`            | critical           | a verified supplier webhook could not be processed                                                                     |
+| `supplier_payment_failed`            | critical           | the supplier reported a failed payment                                                                                 |
+| `email_not_configured`               | critical           | a ready server needs its credentials emailed but Email Service is unset                                                |
+| `credentials_email_failed`           | warning            | a credential email attempt failed and will be retried                                                                  |
+| `credentials_email_exhausted`        | critical           | all three credential-email attempts failed; send manually                                                              |
+| `backup_stale`                       | critical           | no heartbeat, or the latest verified backup is older than 26 h                                                         |
+| `backup_freshness_unavailable`       | critical           | the heartbeat table could not be read (at most every six hours)                                                        |
 
 Invalid signatures are deliberately not alerted: anyone can POST them, and they
 would become an alert-spam channel. They are rejected with `401`.

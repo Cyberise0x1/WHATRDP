@@ -6,6 +6,9 @@ export interface CreateFailure {
   certainRejection: boolean;
   message: string;
   customerMessage: string;
+  /** Platform response status/code for the operator alert; never customer data. */
+  supplierStatus: number;
+  supplierCode: string;
 }
 
 /** Shared by the inline Node path and the provisioning Workflow. */
@@ -16,21 +19,30 @@ export function classifyCreateFailure(error: unknown): CreateFailure {
     typeof error === "object" && error !== null && "status" in error
       ? Number((error as { status: unknown }).status)
       : 0;
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
   const certainRejection = status >= 400 && status < 500 && status !== 408;
   return {
     certainRejection,
     message:
       status === 402
-        ? "Supplier credit is insufficient. Support must review fulfilment."
+        ? "A WHATRDP server could not be created: platform credit is insufficient"
         : certainRejection
-          ? "Supplier rejected this order. Contact support."
-          : "Supplier creation outcome is uncertain. Support must reconcile before any retry.",
+          ? "A WHATRDP server could not be created: the request was rejected"
+          : "A WHATRDP server creation did not complete and needs review",
     customerMessage:
       status === 402
         ? "This order cannot be provisioned right now. Support must review it."
         : certainRejection
           ? "This order was rejected. Contact support."
           : "Provisioning is under review. Contact support before retrying.",
+    supplierStatus: Number.isFinite(status) ? status : 0,
+    supplierCode: code || "unknown",
   };
 }
 
@@ -56,7 +68,12 @@ export async function runProvisioning(
       code: failure.certainRejection ? "provisioning_failed" : "provisioning_review_required",
       severity: "critical",
       message: failure.message,
-      context: { orderId: id, certainRejection: failure.certainRejection },
+      context: {
+        orderId: id,
+        certainRejection: failure.certainRejection,
+        supplierStatus: failure.supplierStatus,
+        supplierCode: failure.supplierCode,
+      },
     });
     return store.update(id, {
       status: failure.certainRejection ? "FAILED" : "REVIEW_REQUIRED",
